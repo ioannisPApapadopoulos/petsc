@@ -318,4 +318,6 @@ PETSC_EXTERN PetscErrorCode DMPlexNaturalToGlobalEnd(DM, Vec, Vec);
 
 /* mesh adaptation */
 PETSC_EXTERN PetscErrorCode DMPlexAdapt(DM, Vec, const char [], DM *);
+
+PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh2d(DM, const char [], const char [], const PetscBool); 
 #endif
