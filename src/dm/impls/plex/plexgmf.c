@@ -7,10 +7,21 @@ PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM dm, PetscBool writeMesh, Vec sol,  
                                       const char bdLabelName[], const char meshName[], const char solNames[], 
                                       const PetscBool ascii) {
   
-  PetscErrorCode      ierr;
+  PetscErrorCode ierr;
         
-  PetscFunctionBegin;      
+  PetscFunctionBegin;
   ierr = DMPlexWrite_gmfMesh2d(dm, writeMesh, 1, &sol,  &solType, bdLabelName, meshName, &solNames, ascii);CHKERRQ(ierr);                                
+  PetscFunctionReturn(0);                                      
+
+}
+
+// For simple python use
+PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM dm, const char bdLabelName[], const char meshName[], const PetscBool ascii) {
+  
+  PetscErrorCode ierr;
+        
+  PetscFunctionBegin;
+  ierr = DMPlexWrite_gmfMesh2d(dm, PETSC_TRUE, 0, NULL,  NULL, bdLabelName, meshName, NULL, ascii);CHKERRQ(ierr);                                
   PetscFunctionReturn(0);                                      
 
 }
