@@ -2,6 +2,9 @@
 #include "libmesh7.h"
 
 
+
+#undef __FUNCT__
+#define __FUNCT__ "DMPlexWrite_gmfMesh2d_1sol"
 // For simple python use
 PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM dm, PetscBool writeMesh, Vec sol,  PetscInt solType, 
                                       const char bdLabelName[], const char meshName[], const char solNames[], 
@@ -15,6 +18,9 @@ PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM dm, PetscBool writeMesh, Vec sol,  
 
 }
 
+
+#undef __FUNCT__
+#define __FUNCT__ "DMPlexWrite_gmfMesh2d_noSol"
 // For simple python use
 PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM dm, const char bdLabelName[], const char meshName[], const PetscBool ascii) {
   
@@ -27,7 +33,8 @@ PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM dm, const char bdLabelName[], cons
 }
 
 
-
+#undef __FUNCT__
+#define __FUNCT__ "DMPlexWrite_gmfMesh2d"
 // solTypes: 1 for a scalar, 2 for a vector, 3 for symmetric matrix and 4 for a full matrix
 
 PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, PetscInt numSol, Vec * sol,  PetscInt * solTypes, 
