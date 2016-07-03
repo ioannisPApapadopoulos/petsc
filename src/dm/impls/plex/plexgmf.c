@@ -2,6 +2,21 @@
 #include "libmesh7.h"
 
 
+// For simple python use
+PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM dm, PetscBool writeMesh, Vec sol,  PetscInt solType, 
+                                      const char bdLabelName[], const char meshName[], const char solNames[], 
+                                      const PetscBool ascii) {
+  
+  PetscErrorCode      ierr;
+        
+  PetscFunctionBegin;      
+  ierr = DMPlexWrite_gmfMesh2d(dm, writeMesh, 1, &sol,  &solType, bdLabelName, meshName, &solNames, ascii);CHKERRQ(ierr);                                
+  PetscFunctionReturn(0);                                      
+
+}
+
+
+
 // solTypes: 1 for a scalar, 2 for a vector, 3 for symmetric matrix and 4 for a full matrix
 
 PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, PetscInt numSol, Vec * sol,  PetscInt * solTypes, 
@@ -22,7 +37,7 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, PetscInt numSol
   PetscErrorCode      ierr;
   
   
-  
+  PetscFunctionBegin;
   B64 = PETSC_TRUE;
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm, 0, &cStart, &cEnd);CHKERRQ(ierr);
