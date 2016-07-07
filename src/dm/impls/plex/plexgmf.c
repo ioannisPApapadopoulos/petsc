@@ -6,15 +6,15 @@
 
 #undef __FUNCT__
 #define __FUNCT__ "DMPlexWrite_gmfMesh2d_1sol"
-// For simple python use
-PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM dm, PetscBool writeMesh, Vec sol,  PetscInt solType, 
-                                      const char bdLabelName[], const char meshName[], const char solNames[], 
-                                      const PetscBool ascii) {
+// Temporary - For simple python use
+PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM dm, PetscBool writeMesh, const char bdLabelName[], const char meshName[], 
+                                          Vec sol,  PetscInt solType, const char solNames[], 
+                                          PetscSection section, PetscBool ascii) {
   
   PetscErrorCode ierr;
         
   PetscFunctionBegin;
-  ierr = DMPlexWrite_gmfMesh2d(dm, writeMesh, 1, &sol,  &solType, bdLabelName, meshName, &solNames, ascii);CHKERRQ(ierr);                                
+  ierr = DMPlexWrite_gmfMesh2d(dm, writeMesh, bdLabelName, meshName, 1, &sol,  &solType, &solNames, section, ascii);CHKERRQ(ierr);                                
   PetscFunctionReturn(0);                                      
 
 }
@@ -22,13 +22,13 @@ PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM dm, PetscBool writeMesh, Vec sol,  
 
 #undef __FUNCT__
 #define __FUNCT__ "DMPlexWrite_gmfMesh2d_noSol"
-// For simple python use
-PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM dm, const char bdLabelName[], const char meshName[], const PetscBool ascii) {
+// Temporary - For simple python use
+PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM dm, const char bdLabelName[], const char meshName[], PetscSection section, PetscBool ascii) {
   
   PetscErrorCode ierr;
         
   PetscFunctionBegin;
-  ierr = DMPlexWrite_gmfMesh2d(dm, PETSC_TRUE, 0, NULL,  NULL, bdLabelName, meshName, NULL, ascii);CHKERRQ(ierr);                                
+  ierr = DMPlexWrite_gmfMesh2d(dm, PETSC_TRUE, bdLabelName, meshName, 0, NULL, NULL, NULL, section, ascii);CHKERRQ(ierr);                                
   PetscFunctionReturn(0);                                      
 
 }
@@ -38,9 +38,9 @@ PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM dm, const char bdLabelName[], cons
 #define __FUNCT__ "DMPlexWrite_gmfMesh2d"
 // solTypes: 1 for a scalar, 2 for a vector, 3 for symmetric matrix and 4 for a full matrix
 
-PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, PetscInt numSol, Vec * sol,  PetscInt * solTypes, 
-                                      const char bdLabelName[], const char meshName[], const char * solNames[], 
-                                      const PetscBool ascii) {
+PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLabelName[], const char meshName[], 
+                                     PetscInt numSol, Vec * sol,  PetscInt * solTypes, const char * solNames[],
+                                     PetscSection section, PetscBool ascii) {
   
   DM                  cdm;
   PetscSection        coordSection;
@@ -67,24 +67,24 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, PetscInt numSol
   numVertices = vEnd - vStart;
   ierr = DMPlexGetDepthStratum(dm, 1, &eStart, &eEnd);CHKERRQ(ierr);
   numEdges = eEnd - eStart;
-  ierr = DMGetCoordinateDM(dm, &cdm);CHKERRQ(ierr);
-  ierr = DMGetDefaultSection(cdm, &coordSection);CHKERRQ(ierr);
-
+  if (section)
+    coordSection = section;
+  else {
+    ierr = DMGetCoordinateDM(dm, &cdm);CHKERRQ(ierr);
+    ierr = DMGetDefaultSection(cdm, &coordSection);CHKERRQ(ierr);
+  }
 
   if (writeMesh){
-
     strcpy(fileName, meshName);
     if ( ascii ) strcat(fileName, ".mesh");
-    else         strcat(fileName, ".meshb");    
+    else         strcat(fileName, ".meshb");
     if ( B64 ) fileVersion = GmfDouble;
     else       fileVersion = GmfFloat; 
-       
     if ( !(meshIndex = GmfOpenMesh(fileName, GmfWrite, fileVersion, dim)) ) {
       fprintf(stderr,"####  ERROR: mesh file %s cannot be opened\n", fileName);
       exit(1);
     }
     printf("  %%%% %s opened\n",fileName);
-    
     GmfSetKwd(meshIndex, GmfVertices, numVertices);
     tag = 0;
     ierr = DMGetCoordinatesLocal(dm, &coordinates);CHKERRQ(ierr);
@@ -131,14 +131,11 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, PetscInt numSol
       }
     }
 
-
-    
     if ( !GmfCloseMesh(meshIndex) ) {
       fprintf(stderr,"#### ERROR: mesh file %s cannot be closed\n",fileName);
       exit(1);
     }
   }
-
 
   for (iSol = 0; iSol < numSol; ++iSol) {
 

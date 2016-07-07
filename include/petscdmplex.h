@@ -319,9 +319,9 @@ PETSC_EXTERN PetscErrorCode DMPlexNaturalToGlobalEnd(DM, Vec, Vec);
 /* mesh adaptation */
 PETSC_EXTERN PetscErrorCode DMPlexAdapt(DM, Vec, const char [], DM *);
 
-PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh2d(DM, PetscBool, PetscInt, Vec *,  PetscInt *, const char [], const char [], const char *[], const PetscBool);
-PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM, PetscBool, Vec, PetscInt, const char [], const char [], const char [], const PetscBool);
-PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM, const char [], const char [], const PetscBool);
-PETSC_EXTERN PetscErrorCode DMPlexCreateGmfFromFile_2d(const char [], const char [], DM );
+PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh2d(DM, PetscBool, const char[], const char[], PetscInt, Vec *,  PetscInt *, const char * [], PetscSection, PetscBool);
+PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM, PetscBool, const char [], const char [], Vec, PetscInt, const char [], PetscSection, PetscBool);
+PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM, const char [], const char [], PetscSection, PetscBool);
+PETSC_EXTERN PetscErrorCode DMPlexCreateGmfFromFile_2d(const char [], const char [], DM *);
 PETSC_EXTERN PetscErrorCode DMPlexReadGmfSolFromFile_2d(DM, PetscSection, const char [], Vec *, PetscInt *);
 #endif
