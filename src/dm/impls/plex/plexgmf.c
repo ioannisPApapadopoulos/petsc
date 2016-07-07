@@ -1,5 +1,5 @@
 #include <petsc/private/dmpleximpl.h>   /*I      "petscdmplex.h"   I*/
-#include "libmeshb7.h"
+#include "libmesh6.h"
 
 
 
@@ -46,11 +46,12 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
   PetscSection        coordSection;
   Vec                 coordinates;
   DMLabel             bdLabel = NULL;
+  IS                  bdLabelIds;
   const PetscScalar * coords, * solution;
   PetscScalar       * buffer;
   PetscInt            dim, cStart, cEnd, numCells, c, vStart, vEnd, numVertices, v, eStart, eEnd, numEdges, e, off;
-  PetscInt            idx[3], i, iSol, tag, coneSize;
-  const PetscInt    * cone;
+  PetscInt            idx[3], i, iSol, tag, coneSize, bdLabelSize, size;
+  const PetscInt    * cone, * bdLabelVal;
   PetscBool           B64, flg=PETSC_FALSE;
   char                fileName[512];
   long long           meshIndex, solIndex;
@@ -66,7 +67,6 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
   ierr = DMPlexGetDepthStratum(dm, 0, &vStart, &vEnd);CHKERRQ(ierr);
   numVertices = vEnd - vStart;
   ierr = DMPlexGetDepthStratum(dm, 1, &eStart, &eEnd);CHKERRQ(ierr);
-  numEdges = eEnd - eStart;
   if (section)
     coordSection = section;
   else {
@@ -110,7 +110,8 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
       ierr = DMPlexRestoreTransitiveClosure(dm, c, PETSC_TRUE, &closureSize, &closure);CHKERRQ(ierr);
     }
 
-    GmfSetKwd(meshIndex, GmfEdges, numEdges);
+
+    
     if (bdLabelName) {
       ierr = PetscStrcmp(bdLabelName, "", &flg);CHKERRQ(ierr);
       if (!flg) {
@@ -118,6 +119,15 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
       }
     }
     if (bdLabel)  {
+      ierr = DMGetLabelSize(dm, bdLabelName, &bdLabelSize);CHKERRQ(ierr);
+      ierr = DMGetLabelIdIS(dm, bdLabelName, &bdLabelIds);CHKERRQ(ierr);
+      ierr = ISGetIndices(bdLabelIds, &bdLabelVal);CHKERRQ(ierr);
+      numEdges = 0;
+      for (i=0; i<bdLabelSize; ++i){
+        ierr = DMLabelGetStratumSize(bdLabel, bdLabelVal[i], &size);CHKERRQ(ierr);
+        numEdges += size;
+      }
+      GmfSetKwd(meshIndex, GmfEdges, numEdges);
       for (e = eStart; e < eEnd; ++e) {
         ierr = DMPlexGetConeSize(dm, e, &coneSize);CHKERRQ(ierr);
         ierr = DMPlexGetCone(dm, e, &cone);CHKERRQ(ierr);
@@ -297,10 +307,12 @@ PetscErrorCode DMPlexCreateGmfFromFile_2d(const char meshName[], const char bdLa
   }
   if (bdLabel) {
     numEdges    = GmfStatKwd(meshIndex, GmfEdges);
+    printf("DEBUG  numEdges: %d\n", numEdges);
     GmfGotoKwd(meshIndex, GmfEdges);
     for (e = 0; e < numEdges; ++e) {
       GmfGetLin(meshIndex, GmfEdges, &bufferEdg[0], &bufferEdg[1], &tag);
       bufferEdg[0] += numCells - 1; bufferEdg[1] += numCells - 1;
+      printf("DEBUG HELLO\n");
       ierr = DMPlexGetFullJoin(*dm, 2, (const PetscInt *) bufferEdg, &joinSize, &join);CHKERRQ(ierr);
       if (joinSize != 1) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Could not determine Plex join for file edge %d", e);
       ierr = DMLabelSetValue(bdLabel, join[0], tag);CHKERRQ(ierr);
