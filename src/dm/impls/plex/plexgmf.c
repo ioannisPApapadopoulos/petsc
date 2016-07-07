@@ -36,7 +36,8 @@ PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM dm, const char bdLabelName[], cons
 
 #undef __FUNCT__
 #define __FUNCT__ "DMPlexWrite_gmfMesh2d"
-// solTypes: 1 for a scalar, 2 for a vector, 3 for symmetric matrix and 4 for a full matrix
+// solTypes: 1 for a scalar, 2 for a vector, 3 for symmetric matrix (only 3 values given: upper triangular matrix) and 4 for a full matrix
+//            I add solType = 5 for symmetric matrixes given as 2x2 matrix
 
 PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLabelName[], const char meshName[], 
                                      PetscInt numSol, Vec * sol,  PetscInt * solTypes, const char * solNames[],
@@ -67,9 +68,12 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
   ierr = DMPlexGetDepthStratum(dm, 0, &vStart, &vEnd);CHKERRQ(ierr);
   numVertices = vEnd - vStart;
   ierr = DMPlexGetDepthStratum(dm, 1, &eStart, &eEnd);CHKERRQ(ierr);
-  if (section)
+  if (section) {
+    printf("HERE  section: %p\n", section);
     coordSection = section;
+  }
   else {
+    printf("THERE\n");
     ierr = DMGetCoordinateDM(dm, &cdm);CHKERRQ(ierr);
     ierr = DMGetDefaultSection(cdm, &coordSection);CHKERRQ(ierr);
   }
@@ -94,7 +98,7 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
       GmfSetLin(meshIndex, GmfVertices, coords[off], coords[off+1], tag);  
     }
     ierr = VecRestoreArrayRead(coordinates, &coords);CHKERRQ(ierr);
-    
+
     GmfSetKwd(meshIndex, GmfTriangles, numCells);
     tag = 0;
     for (c = cStart; c < cEnd; ++c) {
@@ -164,7 +168,13 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
     }
     printf("  %%%% %s opened\n",fileName);
 
-    GmfSetKwd(solIndex, solKeyword, numVertices, 1, &solTypes[iSol]);
+    if (solTypes[iSol] == 5) { 
+      solTypes[iSol] = 3;
+      GmfSetKwd(solIndex, solKeyword, numVertices, 1, &solTypes[iSol]);
+      solTypes[iSol] = 5;
+    }
+    else GmfSetKwd(solIndex, solKeyword, numVertices, 1, &solTypes[iSol]);
+    
     ierr = VecGetArrayRead(sol[iSol], &solution);CHKERRQ(ierr);
     buffer = NULL;
     switch(solTypes[iSol]) {
@@ -173,6 +183,10 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
         break;
       case 2 :
         ierr = PetscMalloc1(2, &buffer);CHKERRQ(ierr);
+        break;
+      case 3 :
+      case 5 :
+        ierr = PetscMalloc1(3, &buffer);CHKERRQ(ierr);
         break;
       default :
         printf("####  ERROR  non-scalar solutions not implemented yet\n");
@@ -187,6 +201,18 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
         case 2 :
           buffer[0] = solution[off];
           buffer[1] = solution[off+1];
+          break;
+        case 3 :
+          off /= dim ;
+          buffer[0] = solution[3*off];
+          buffer[1] = solution[3*off+1];
+          buffer[1] = solution[3*off+2];
+          break;
+        case 5 :
+          off /= dim ;
+          buffer[0] = solution[4*off];
+          buffer[1] = solution[4*off+1];
+          buffer[2] = solution[4*off+3];
           break;
         default :
           printf("####  ERROR  non-scalar solutions not implemented yet\n");
@@ -269,7 +295,6 @@ PetscErrorCode DMPlexCreateGmfFromFile_2d(const char meshName[], const char bdLa
   ierr = PetscMalloc1(numVertices*dim, &coordsIn);CHKERRQ(ierr);
   GmfGotoKwd(meshIndex, GmfVertices);
   for (v = 0; v < numVertices ; ++v) {
-    //printf("DEBUG  v: %d\n", v);
     GmfGetLin(meshIndex, GmfVertices, &buffer[0], &buffer[1], &tag);
     coordsIn[2*v]    = (double)buffer[0];
     coordsIn[2*v+1]  = (double)buffer[1];
@@ -307,12 +332,10 @@ PetscErrorCode DMPlexCreateGmfFromFile_2d(const char meshName[], const char bdLa
   }
   if (bdLabel) {
     numEdges    = GmfStatKwd(meshIndex, GmfEdges);
-    printf("DEBUG  numEdges: %d\n", numEdges);
     GmfGotoKwd(meshIndex, GmfEdges);
     for (e = 0; e < numEdges; ++e) {
       GmfGetLin(meshIndex, GmfEdges, &bufferEdg[0], &bufferEdg[1], &tag);
       bufferEdg[0] += numCells - 1; bufferEdg[1] += numCells - 1;
-      printf("DEBUG HELLO\n");
       ierr = DMPlexGetFullJoin(*dm, 2, (const PetscInt *) bufferEdg, &joinSize, &join);CHKERRQ(ierr);
       if (joinSize != 1) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "Could not determine Plex join for file edge %d", e);
       ierr = DMLabelSetValue(bdLabel, join[0], tag);CHKERRQ(ierr);
@@ -359,7 +382,7 @@ PetscErrorCode DMPlexCreateGmfFromFile_2d(const char meshName[], const char bdLa
 
 #undef __FUNCT__
 #define __FUNCT__ "DMPlexReadGmfSolFromFile_2d"
-PetscErrorCode DMPlexReadGmfSolFromFile_2d(DM dm, PetscSection section, const char solName[], Vec * sol, PetscInt * solType) {
+PetscErrorCode DMPlexReadGmfSolFromFile_2d(DM dm, PetscSection section, const char solName[], PetscInt solType, Vec * sol) {
 
   // TODO FOR NOW I ASSUME 1 SOL ONLY PER FILE
   
@@ -406,24 +429,33 @@ PetscErrorCode DMPlexReadGmfSolFromFile_2d(DM dm, PetscSection section, const ch
   if (numSolTypes > 1)
     printf("####  Warning  Several solution fields in file %s. Reading only the first one of type %d\n", fileName, solTypesTable[0]);
   
+  if ((solTypesTable[0] != solType) || (solTypesTable[0] == 3 && solType == 5))
+    printf("####  ERROR  Solution file solType and given solType not in agreement: %d != %d\n", solTypesTable[0], solType);  
   
-  VecSetSizes(*sol, PETSC_DECIDE, numSolAtVerticesLines*solTypesTable[0]);
+  if (solType == 5) {ierr = VecSetSizes(*sol, PETSC_DECIDE, numSolAtVerticesLines*4);CHKERRQ(ierr);}
+  else              {ierr = VecSetSizes(*sol, PETSC_DECIDE, numSolAtVerticesLines*solTypesTable[0]);CHKERRQ(ierr);}
   VecSetFromOptions(*sol);
 
-
   GmfGotoKwd(solIndex, GmfSolAtVertices);
-  ierr = PetscMalloc2(solSize, &buffer, solTypesTable[0], &ix);CHKERRQ(ierr);
+  if (solType == 5)  {ierr = PetscMalloc2(solSize+1, &buffer, 4, &ix);CHKERRQ(ierr);}
+  else               {ierr = PetscMalloc2(solSize, &buffer, solTypesTable[0], &ix);CHKERRQ(ierr);}
   for (v = 0; v < numSolAtVerticesLines; ++v) {
     GmfGetLin(solIndex, GmfSolAtVertices, buffer);
     ierr = PetscSectionGetOffset(section, v+vStart, &off);CHKERRQ(ierr);
-    for (i=0; i<solTypesTable[0]; ++i) ix[i] = solTypesTable[0]*off/2 + i;
+    off /= dim;
+    if (solType == 5) {
+      ix[0] = 4*off; ix[1] = 4*off+1; ix[2] = 4*off+2; ix[3] = 4*off+3;
+      buffer[3] = buffer[2]; buffer[2] = buffer[1];
+    }
+    else {
+      for (i=0; i<solTypesTable[0]; ++i) ix[i] = solTypesTable[0]*off + i;
+    }
     VecSetValues(*sol, solTypesTable[0], ix, buffer, INSERT_VALUES);
   }
   ierr = PetscFree2(buffer, ix);CHKERRQ(ierr);
   VecAssemblyBegin(*sol);
   VecAssemblyEnd(*sol);
 
-  *solType = solTypesTable[0];
 
   PetscFunctionReturn(0);
 }
