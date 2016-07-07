@@ -429,7 +429,7 @@ PetscErrorCode DMPlexReadGmfSolFromFile_2d(DM dm, PetscSection section, const ch
   if (numSolTypes > 1)
     printf("####  Warning  Several solution fields in file %s. Reading only the first one of type %d\n", fileName, solTypesTable[0]);
   
-  if ((solTypesTable[0] != solType) || (solTypesTable[0] == 3 && solType == 5))
+  if ((solTypesTable[0] != solType) && (solTypesTable[0] != 3 || solType != 5))
     printf("####  ERROR  Solution file solType and given solType not in agreement: %d != %d\n", solTypesTable[0], solType);  
   
   if (solType == 5) {ierr = VecSetSizes(*sol, PETSC_DECIDE, numSolAtVerticesLines*4);CHKERRQ(ierr);}
@@ -446,16 +446,17 @@ PetscErrorCode DMPlexReadGmfSolFromFile_2d(DM dm, PetscSection section, const ch
     if (solType == 5) {
       ix[0] = 4*off; ix[1] = 4*off+1; ix[2] = 4*off+2; ix[3] = 4*off+3;
       buffer[3] = buffer[2]; buffer[2] = buffer[1];
+      VecSetValues(*sol, 4, ix, buffer, INSERT_VALUES);
     }
     else {
       for (i=0; i<solTypesTable[0]; ++i) ix[i] = solTypesTable[0]*off + i;
+      VecSetValues(*sol, solTypesTable[0], ix, buffer, INSERT_VALUES);  
     }
-    VecSetValues(*sol, solTypesTable[0], ix, buffer, INSERT_VALUES);
+    
   }
   ierr = PetscFree2(buffer, ix);CHKERRQ(ierr);
   VecAssemblyBegin(*sol);
   VecAssemblyEnd(*sol);
-
 
   PetscFunctionReturn(0);
 }
