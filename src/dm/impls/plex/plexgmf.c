@@ -16,7 +16,6 @@ PetscErrorCode DMPlexWrite_gmfMesh2d_1sol(DM dm, PetscBool writeMesh, const char
   PetscFunctionBegin;
   ierr = DMPlexWrite_gmfMesh2d(dm, writeMesh, bdLabelName, meshName, 1, &sol,  &solType, &solNames, section, ascii);CHKERRQ(ierr);                                
   PetscFunctionReturn(0);                                      
-
 }
 
 
@@ -30,7 +29,6 @@ PetscErrorCode DMPlexWrite_gmfMesh2d_noSol(DM dm, const char bdLabelName[], cons
   PetscFunctionBegin;
   ierr = DMPlexWrite_gmfMesh2d(dm, PETSC_TRUE, bdLabelName, meshName, 0, NULL, NULL, NULL, section, ascii);CHKERRQ(ierr);                                
   PetscFunctionReturn(0);                                      
-
 }
 
 
@@ -69,11 +67,9 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
   numVertices = vEnd - vStart;
   ierr = DMPlexGetDepthStratum(dm, 1, &eStart, &eEnd);CHKERRQ(ierr);
   if (section) {
-    printf("HERE  section: %p\n", section);
     coordSection = section;
   }
   else {
-    printf("THERE\n");
     ierr = DMGetCoordinateDM(dm, &cdm);CHKERRQ(ierr);
     ierr = DMGetDefaultSection(cdm, &coordSection);CHKERRQ(ierr);
   }
@@ -133,6 +129,8 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
       }
       GmfSetKwd(meshIndex, GmfEdges, numEdges);
       for (e = eStart; e < eEnd; ++e) {
+        ierr = DMLabelGetValue(bdLabel, e, &tag);CHKERRQ(ierr);
+        if (tag<0) continue;
         ierr = DMPlexGetConeSize(dm, e, &coneSize);CHKERRQ(ierr);
         ierr = DMPlexGetCone(dm, e, &cone);CHKERRQ(ierr);
         if (coneSize != 2) {
@@ -140,8 +138,7 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
           exit(1);
         }
         idx[0] = cone[0] - vStart + 1; idx[1] = cone[1] - vStart + 1;
-        ierr = DMLabelGetValue(bdLabel, e, &tag);CHKERRQ(ierr);
-        if (tag>0) GmfSetLin(meshIndex, GmfEdges, idx[0], idx[1], tag);
+        GmfSetLin(meshIndex, GmfEdges, idx[0], idx[1], tag);
       }
     }
 
@@ -206,7 +203,7 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
           off /= dim ;
           buffer[0] = solution[3*off];
           buffer[1] = solution[3*off+1];
-          buffer[1] = solution[3*off+2];
+          buffer[2] = solution[3*off+2];
           break;
         case 5 :
           off /= dim ;
@@ -229,11 +226,8 @@ PetscErrorCode DMPlexWrite_gmfMesh2d(DM dm, PetscBool writeMesh, const char bdLa
     }
 
   }
-  
-
 
   PetscFunctionReturn(0);
-  
 }
 
 
@@ -296,8 +290,8 @@ PetscErrorCode DMPlexCreateGmfFromFile_2d(const char meshName[], const char bdLa
   GmfGotoKwd(meshIndex, GmfVertices);
   for (v = 0; v < numVertices ; ++v) {
     GmfGetLin(meshIndex, GmfVertices, &buffer[0], &buffer[1], &tag);
-    coordsIn[2*v]    = (double)buffer[0];
-    coordsIn[2*v+1]  = (double)buffer[1];
+    coordsIn[dim*v]    = (double)buffer[0];
+    coordsIn[dim*v+1]  = (double)buffer[1];
   }
 
   GmfGotoKwd(meshIndex, GmfTriangles);
