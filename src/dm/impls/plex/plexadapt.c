@@ -139,7 +139,9 @@ PetscErrorCode DMPlexRemesh_Internal(DM dm, Vec vertexMetric, const char bdLabel
   }
   pragmatic_set_boundary(&numBdFaces, bdFaces, bdFaceIds);
   pragmatic_set_metric(metric);
+  printf("DEBUG  -- calling pragmatic\n");
   pragmatic_adapt(remeshBd ? 1 : 0);
+  printf("DEBUG  -- end pragmatic\n");
   /* Read out mesh */
   pragmatic_get_info(&numVerticesNew, &numCellsNew);
   ierr = PetscMalloc1(numVerticesNew*dim, &coordsNew);CHKERRQ(ierr);
