@@ -330,4 +330,6 @@ PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh3d_1sol(DM, PetscBool, const char
 PETSC_EXTERN PetscErrorCode DMPlexWrite_gmfMesh3d_noSol(DM, const char [], const char [], PetscSection, PetscBool);
 PETSC_EXTERN PetscErrorCode DMPlexCreateGmfFromFile_3d(const char [], const char [], DM *);
 PETSC_EXTERN PetscErrorCode DMPlexReadGmfSolFromFile_3d(DM, PetscSection, const char [], PetscInt, Vec *);
+
+PETSC_EXTERN PetscErrorCode DMPlexMetricGradation2d_Internal(DM, PetscReal *, PetscReal *, PetscReal *);
 #endif

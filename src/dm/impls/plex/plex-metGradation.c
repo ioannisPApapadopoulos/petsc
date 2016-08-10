@@ -1,7 +1,6 @@
 #include <petsc/private/dmpleximpl.h>   /*I      "petscdmplex.h"   I*/
-#ifdef PETSC_HAVE_PRAGMATIC
-#include <pragmatic/cpragmatic.h>
-#endif
+
+
 
 #undef __FUNCT__
 #define __FUNCT__ "DMPlexMetricReduction2d_Internal"
@@ -64,13 +63,13 @@ PetscErrorCode DMPlexMetricReduction2d_Internal(PetscReal * mat, PetscReal * eig
     eigVec[2] = eigVal[1]-met[2];
     eigVec[3] = met[1];
     vecNrm    = eigVec[2]*eigVec[2] + eigVec[3]*eigVec[3];
-    if ( vecNrm < 1e-30 ) {	//--- in the case we have dd = 0 ie egv1 = egv2 
-	  //--- thus M is the Id matrix after normalisation
+    if ( vecNrm < 1e-30 ) { //--- in the case we have dd = 0 ie egv1 = egv2 
+    //--- thus M is the Id matrix after normalisation
       if ( fabs(eigVal[0]-1.) < 1.e-12 && fabs(eigVal[1]-1.) < 1.e-12 ) {  
-	    eigVal[0] = eigVal[1] = nrm;
+      eigVal[0] = eigVal[1] = nrm;
         eigVec[0] = 1.; eigVec[1] = 0.;
         eigVec[2] = 0.; eigVec[3] = 1.;
-	    PetscFunctionReturn(0);
+      PetscFunctionReturn(0);
       }
       else
         exit(13);
@@ -317,11 +316,13 @@ static inline double product(double * V, double * Met) {
   return len;
 }
 
+
+
 #undef __FUNCT__
 #define __FUNCT__ "DMPlexMetricGradation2d_Internal"
 PetscErrorCode DMPlexMetricGradation2d_Internal(DM dm, PetscReal * metric, PetscReal * x, PetscReal * y) {
   
-  PetscReal         beta = 1.1;
+  PetscReal         beta = 1.13;
   
   PetscBool         correction;
   PetscInt        * verTag, eStart, eEnd, numEdges, vStart, vEnd, numVertices;
@@ -334,29 +335,39 @@ PetscErrorCode DMPlexMetricGradation2d_Internal(DM dm, PetscReal * metric, Petsc
   
   
   PetscFunctionBegin;
-  
+
   ierr = DMPlexGetDepthStratum(dm, 1, &eStart, &eEnd);CHKERRQ(ierr);
   numEdges = eEnd - eStart;
+//  printf("DEBUG  numEdges: %d\n", numEdges);
   ierr = DMPlexGetDepthStratum(dm, 0, &vStart, &vEnd);CHKERRQ(ierr);
   numVertices = vEnd - vStart;
+
+//  for (iVer1 = 0; iVer1 < numVertices; ++iVer1) {
+//    printf("DEBUG  metric[iVer: %d] : %f %f %f %f\n", iVer1, metric[4*iVer1+0], metric[4*iVer1+1], metric[4*iVer1+2], metric[4*iVer1+3]);
+//  }
   
-  ierr = PetscMalloc(numVertices, &verTag);CHKERRQ(ierr);
+  ierr = PetscMalloc1(numVertices, &verTag);CHKERRQ(ierr);
   for (v = 0; v < vEnd-vStart; ++v) verTag[v] = 1;
   
   ln_beta = log(beta);
-  
+ 
+//  printf("DEBUG  log(beta): %f\n", ln_beta);
+
   correction = PETSC_TRUE;
   iteCor = 0;
-  while (correction) {
+  while (correction && iteCor < 500) {
     iteCor++;
+//    printf("EBUG  iteCor: %d\n", iteCor);
     correction = PETSC_FALSE;    
     for (e = eStart; e < eEnd; ++e) {
 
       ierr = DMPlexGetCone(dm, e, &cone);CHKERRQ(ierr);
       iVer1 = cone[0]-vStart; 
       iVer2 = cone[1]-vStart; 
-      iMet1 = 3*iVer1; 
-      iMet2 = 3*iVer2;
+      iMet1 = 4*iVer1; 
+      iMet2 = 4*iVer2;
+
+//	  printf("DEBUG  iEdg: %d,  iVer1, iVer2: %d %d, iMet1, iMet2: %d %d,  ver: [%f %f], [%f %f]\n", e-eStart, iVer1, iVer2, iMet1, iMet2, x[iVer1], y[iVer1], x[iVer2], y[iVer2]);
       
       if (verTag[iVer1] < iteCor && verTag[iVer2] < iteCor) continue;
 
@@ -364,9 +375,11 @@ PetscErrorCode DMPlexMetricGradation2d_Internal(DM dm, PetscReal * metric, Petsc
       v12[1] = y[iVer2]-y[iVer1];
       v21[0] = -v12[0];
       v21[1] = -v12[1];
-      
+
       met1[0] = metric[iMet1]; met1[1] = metric[iMet1+1]; met1[2] = metric[iMet1+3]; 
       met2[0] = metric[iMet2]; met2[1] = metric[iMet2+1]; met2[2] = metric[iMet2+3]; 
+
+//	  printf("DEBUG          v12: %f %f  met1: %f %f %f  met2: %f %f %f\n", v12[0], v12[1], met1[0], met1[1], met1[2], met2[0], met2[1], met2[2] );
 
       lengthEdge1 = sqrt(product(v12, met1)); 
       lengthEdge2 = sqrt(product(v21, met2));
@@ -374,13 +387,19 @@ PetscErrorCode DMPlexMetricGradation2d_Internal(DM dm, PetscReal * metric, Petsc
       eta2_21 = 1+lengthEdge2*ln_beta;
       eta2_12 *= eta2_12;
       eta2_21 *= eta2_21;
+      eta2_12 = 1./eta2_12;
+      eta2_21 = 1./eta2_21;
+//	  printf("DEBUG          lenEdg1,2 : %f %f   eta2_12,21: %f %f\n", lengthEdge1, lengthEdge2, eta2_12, eta2_21);
       for (i=0;i<3;++i) {
         grownMet1[i] = eta2_12*met1[i];
-        grownMet2[i] = eta2_12*met2[i];
+        grownMet2[i] = eta2_21*met2[i];
       }
       
       metricIntersection(met1, grownMet2, metNew1); // intersect M1 and eta12*M2
       metricIntersection(met2, grownMet1, metNew2);
+
+//	  printf("DEBUG          grownMet1,2: %f %f %f   %f %f %f\n", grownMet1[0], grownMet1[1], grownMet1[2], grownMet2[0], grownMet2[1], grownMet2[2]);
+//      printf("DEBUG          metNew1,2: %f %f %f   %f %f %f\n", metNew1[0], metNew1[1], metNew1[2], metNew2[0], metNew2[1], metNew2[2]);
 
       // compute norm met-metnew for each edge end
       // if norm > 1e-3, tag = 1, correction = PETSC_TRUE
@@ -405,9 +424,12 @@ PetscErrorCode DMPlexMetricGradation2d_Internal(DM dm, PetscReal * metric, Petsc
         correction = PETSC_TRUE;
       }
 
+
     }
   }  
-  
+
+
+  PetscFree(verTag);
   PetscFunctionReturn(0);
 }
 

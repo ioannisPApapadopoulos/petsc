@@ -138,6 +138,7 @@ PetscErrorCode DMPlexRemesh_Internal(DM dm, Vec vertexMetric, const char bdLabel
   default: SETERRQ1(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_OUTOFRANGE, "No Pragmatic adaptation defined for dimension %d", dim);
   }
   pragmatic_set_boundary(&numBdFaces, bdFaces, bdFaceIds);
+  printf("DEBUG  -- metric gradation\n");
   ierr = DMPlexMetricGradation2d_Internal(dm, metric, x, y);CHKERRQ(ierr);
   pragmatic_set_metric(metric);
   printf("DEBUG  -- calling pragmatic\n");
