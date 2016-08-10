@@ -139,7 +139,8 @@ PetscErrorCode DMPlexRemesh_Internal(DM dm, Vec vertexMetric, const char bdLabel
   }
   pragmatic_set_boundary(&numBdFaces, bdFaces, bdFaceIds);
   printf("DEBUG  -- metric gradation\n");
-  ierr = DMPlexMetricGradation2d_Internal(dm, metric, x, y);CHKERRQ(ierr);
+  if (dim == 2)  { ierr = DMPlexMetricGradation2d_Internal(dm, metric, x, y);CHKERRQ(ierr); }
+  else  { ierr = DMPlexMetricGradation3d_Internal(dm, metric, x, y, z);CHKERRQ(ierr); }
   pragmatic_set_metric(metric);
   printf("DEBUG  -- calling pragmatic\n");
   pragmatic_adapt(remeshBd ? 1 : 0);
