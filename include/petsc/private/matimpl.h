@@ -382,6 +382,7 @@ struct _p_Mat {
   MatNullSpace           nullsp;           /* null space (operator is singular) */
   MatNullSpace           transnullsp;      /* null space of transpose of operator */
   MatNullSpace           nearnullsp;       /* near null space to be used by multigrid methods */
+  PetscInt               congruentlayouts; /* are the rows and columns layouts congruent? */
   PetscBool              preallocated;
   MatStencilInfo         stencil;          /* information for structured grid */
   PetscBool              symmetric,hermitian,structurally_symmetric,spd;
@@ -407,6 +408,12 @@ struct _p_Mat {
 
 PETSC_INTERN PetscErrorCode MatAXPY_Basic(Mat,PetscScalar,Mat,MatStructure);
 PETSC_INTERN PetscErrorCode MatAXPY_BasicWithPreallocation(Mat,Mat,PetscScalar,Mat,MatStructure);
+
+/*
+    Utility for MatZeroRows
+*/
+PETSC_INTERN PetscErrorCode MatZeroRowsMapLocal_Private(Mat,PetscInt,const PetscInt*,PetscInt*,PetscInt**);
+
 /*
     Object for partitioning graphs
 */

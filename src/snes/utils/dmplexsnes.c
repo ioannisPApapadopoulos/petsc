@@ -180,7 +180,7 @@ PetscErrorCode DMInterpolationSetUp(DMInterpolationInfo ctx, DM dm, PetscBool re
   ierr = PetscMalloc2(N,&foundProcs,N,&globalProcs);CHKERRQ(ierr);
   for (p = 0; p < N; ++p) {foundProcs[p] = size;}
   cellSF = NULL;
-  ierr = DMLocatePoints(dm, pointVec, DM_POINTLOCATION_NONE, &cellSF);CHKERRQ(ierr);
+  ierr = DMLocatePoints(dm, pointVec, DM_POINTLOCATION_REMOVE, &cellSF);CHKERRQ(ierr);
   ierr = PetscSFGetGraph(cellSF,NULL,&numFound,&foundPoints,&foundCells);CHKERRQ(ierr);
 #endif
   for (p = 0; p < numFound; ++p) {
@@ -421,6 +421,7 @@ PETSC_STATIC_INLINE PetscErrorCode QuadJacobian_Private(SNES snes, Vec Xref, Mat
 PETSC_STATIC_INLINE PetscErrorCode DMInterpolate_Quad_Private(DMInterpolationInfo ctx, DM dm, Vec xLocal, Vec v)
 {
   DM             dmCoord;
+  PetscFE        fem;
   SNES           snes;
   KSP            ksp;
   PC             pc;
@@ -429,9 +430,11 @@ PETSC_STATIC_INLINE PetscErrorCode DMInterpolate_Quad_Private(DMInterpolationInf
   const PetscScalar *coords;
   PetscScalar    *a;
   PetscInt       p;
+  const PetscInt dof = ctx->dof;
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  ierr = DMGetField(dm, 0, (PetscObject *) &fem);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(dm, &coordsLocal);CHKERRQ(ierr);
   ierr = DMGetCoordinateDM(dm, &dmCoord);CHKERRQ(ierr);
   ierr = SNESCreate(PETSC_COMM_SELF, &snes);CHKERRQ(ierr);
@@ -464,7 +467,6 @@ PETSC_STATIC_INLINE PetscErrorCode DMInterpolate_Quad_Private(DMInterpolationInf
     ierr = DMPlexVecGetClosure(dmCoord, NULL, coordsLocal, c, &coordSize, &vertices);CHKERRQ(ierr);
     if (4*2 != coordSize) SETERRQ2(ctx->comm, PETSC_ERR_ARG_SIZ, "Invalid closure size %d should be %d", coordSize, 4*2);
     ierr = DMPlexVecGetClosure(dm, NULL, xLocal, c, &xSize, &x);CHKERRQ(ierr);
-    if (4*ctx->dof != xSize) SETERRQ2(ctx->comm, PETSC_ERR_ARG_SIZ, "Invalid closure size %d should be %d", xSize, 4*ctx->dof);
     ierr   = SNESSetFunction(snes, NULL, NULL, (void*) vertices);CHKERRQ(ierr);
     ierr   = SNESSetJacobian(snes, NULL, NULL, NULL, (void*) vertices);CHKERRQ(ierr);
     ierr   = VecGetArray(real, &xi);CHKERRQ(ierr);
@@ -475,8 +477,23 @@ PETSC_STATIC_INLINE PetscErrorCode DMInterpolate_Quad_Private(DMInterpolationInf
     ierr   = VecGetArray(ref, &xi);CHKERRQ(ierr);
     xir[0] = PetscRealPart(xi[0]);
     xir[1] = PetscRealPart(xi[1]);
-    for (comp = 0; comp < ctx->dof; ++comp) a[p*ctx->dof+comp] = x[0*ctx->dof+comp]*(1 - xir[0])*(1 - xir[1]) + x[1*ctx->dof+comp]*xir[0]*(1 - xir[1]) + x[2*ctx->dof+comp]*xir[0]*xir[1] + x[3*ctx->dof+comp]*(1 - xir[0])*xir[1];
+    if (4*dof != xSize) {
+      PetscReal *B;
+      PetscInt   d;
 
+      xir[0] = 2.0*xir[0] - 1.0; xir[1] = 2.0*xir[1] - 1.0;
+      ierr = PetscFEGetTabulation(fem, 1, xir, &B, NULL, NULL);CHKERRQ(ierr);
+      for (comp = 0; comp < dof; ++comp) {
+        a[p*dof+comp] = 0.0;
+        for (d = 0; d < xSize/dof; ++d) {
+          a[p*dof+comp] += x[d*dof+comp]*B[d*dof+comp];
+        }
+      }
+      ierr = PetscFERestoreTabulation(fem, 1, xir, &B, NULL, NULL);CHKERRQ(ierr);
+    } else {
+      for (comp = 0; comp < dof; ++comp)
+        a[p*dof+comp] = x[0*dof+comp]*(1 - xir[0])*(1 - xir[1]) + x[1*dof+comp]*xir[0]*(1 - xir[1]) + x[2*dof+comp]*xir[0]*xir[1] + x[3*dof+comp]*(1 - xir[0])*xir[1];
+    }
     ierr = VecRestoreArray(ref, &xi);CHKERRQ(ierr);
     ierr = DMPlexVecRestoreClosure(dmCoord, NULL, coordsLocal, c, &coordSize, &vertices);CHKERRQ(ierr);
     ierr = DMPlexVecRestoreClosure(dm, NULL, xLocal, c, &xSize, &x);CHKERRQ(ierr);
@@ -1645,6 +1662,12 @@ PetscErrorCode DMPlexComputeResidual_Internal(DM dm, PetscInt cStart, PetscInt c
       /* Add elemVec to locX */
       for (cell = cS; cell < cE; ++cell) {
         if (mesh->printFEM > 1) {ierr = DMPrintCellVector(cell, name, totDim, &elemVec[cell*totDim]);CHKERRQ(ierr);}
+        if (ghostLabel) {
+          PetscInt ghostVal;
+
+          ierr = DMLabelGetValue(ghostLabel,cell,&ghostVal);CHKERRQ(ierr);
+          if (ghostVal > 0) continue;
+        }
         ierr = DMPlexVecSetClosure(dm, section, locF, cell, &elemVec[cell*totDim], ADD_ALL_VALUES);CHKERRQ(ierr);
       }
     }
@@ -1668,7 +1691,7 @@ PetscErrorCode DMPlexComputeResidual_Internal(DM dm, PetscInt cStart, PetscInt c
         /* Accumulate fluxes to cells */
         for (face = fS, iface = 0; face < fE; ++face) {
           const PetscInt *cells;
-          PetscScalar    *fL, *fR;
+          PetscScalar    *fL = NULL, *fR = NULL;
           PetscInt        ghost, d, nsupp, nchild;
 
           ierr = DMLabelGetValue(ghostLabel, face, &ghost);CHKERRQ(ierr);
@@ -1676,8 +1699,10 @@ PetscErrorCode DMPlexComputeResidual_Internal(DM dm, PetscInt cStart, PetscInt c
           ierr = DMPlexGetTreeChildren(dm, face, &nchild, NULL);CHKERRQ(ierr);
           if (ghost >= 0 || nsupp > 2 || nchild > 0) continue;
           ierr = DMPlexGetSupport(dm, face, &cells);CHKERRQ(ierr);
-          ierr = DMPlexPointGlobalFieldRef(dm, cells[0], f, fa, &fL);CHKERRQ(ierr);
-          ierr = DMPlexPointGlobalFieldRef(dm, cells[1], f, fa, &fR);CHKERRQ(ierr);
+          ierr = DMLabelGetValue(ghostLabel,cells[0],&ghost);CHKERRQ(ierr);
+          if (ghost <= 0) {ierr = DMPlexPointLocalFieldRef(dm, cells[0], f, fa, &fL);CHKERRQ(ierr);}
+          ierr = DMLabelGetValue(ghostLabel,cells[1],&ghost);CHKERRQ(ierr);
+          if (ghost <= 0) {ierr = DMPlexPointLocalFieldRef(dm, cells[1], f, fa, &fR);CHKERRQ(ierr);}
           for (d = 0; d < pdim; ++d) {
             if (fL) fL[d] -= fluxL[iface*totDim+foff+d];
             if (fR) fR[d] += fluxR[iface*totDim+foff+d];
@@ -1707,6 +1732,12 @@ PetscErrorCode DMPlexComputeResidual_Internal(DM dm, PetscInt cStart, PetscInt c
         for (cell = cS; cell < cE; ++cell) {
           PetscScalar *u_t, *r;
 
+          if (ghostLabel) {
+            PetscInt ghostVal;
+
+            ierr = DMLabelGetValue(ghostLabel,cell,&ghostVal);CHKERRQ(ierr);
+            if (ghostVal > 0) continue;
+          }
           ierr = DMPlexPointLocalFieldRead(dm, cell, f, x_t, &u_t);CHKERRQ(ierr);
           ierr = DMPlexPointLocalFieldRef(dm, cell, f, fa, &r);CHKERRQ(ierr);
           for (d = 0; d < pdim; ++d) r[d] += u_t[d];

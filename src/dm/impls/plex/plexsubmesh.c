@@ -415,7 +415,7 @@ static PetscErrorCode DMPlexShiftCoordinates_Internal(DM dm, PetscInt depthShift
   ierr = PetscSectionSetUp(newCoordSection);CHKERRQ(ierr);
   ierr = DMSetCoordinateSection(dmNew, PETSC_DETERMINE, newCoordSection);CHKERRQ(ierr);
   ierr = PetscSectionGetStorageSize(newCoordSection, &coordSize);CHKERRQ(ierr);
-  ierr = VecCreate(PetscObjectComm((PetscObject)dm), &newCoordinates);CHKERRQ(ierr);
+  ierr = VecCreate(PETSC_COMM_SELF, &newCoordinates);CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject) newCoordinates, "coordinates");CHKERRQ(ierr);
   ierr = VecSetSizes(newCoordinates, coordSize, PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = VecSetBlockSize(newCoordinates, dim);CHKERRQ(ierr);
@@ -582,7 +582,7 @@ static PetscErrorCode DMPlexShiftLabels_Internal(DM dm, PetscInt depthShift[], D
       ierr = DMPlexGetSupport(dmNew, f, &cells);CHKERRQ(ierr);
       ierr = DMLabelGetValue(vtkLabel, cells[0], &vA);CHKERRQ(ierr);
       ierr = DMLabelGetValue(vtkLabel, cells[1], &vB);CHKERRQ(ierr);
-      if (!vA && !vB) {ierr = DMLabelSetValue(ghostLabel, f, 1);CHKERRQ(ierr);}
+      if (vA != 1 && vB != 1) {ierr = DMLabelSetValue(ghostLabel, f, 1);CHKERRQ(ierr);}
     }
   }
   if (0) {
@@ -724,7 +724,7 @@ static PetscErrorCode DMPlexConstructGhostCells_Internal(DM dm, DMLabel label, P
       if (loc >= 0 || numChildren) continue;
       if ((faces[f] < fStart) || (faces[f] >= fEnd)) continue;
       ierr = DMPlexGetSupportSize(dm, faces[f], &size);CHKERRQ(ierr);
-      if (size != 1) SETERRQ2(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONG, "DM has boundary face %d with %d support cells", faces[f], size);
+      if (size != 1) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_WRONG, "DM has boundary face %d with %d support cells", faces[f], size);
       ierr = DMPlexSetSupportSize(gdm, faces[f] + Ng, 2);CHKERRQ(ierr);
     }
     ierr = ISRestoreIndices(faceIS, &faces);CHKERRQ(ierr);
@@ -2760,7 +2760,7 @@ static PetscErrorCode DMPlexCreateSubmesh_Uninterpolated(DM dm, DMLabel vertexLa
     }
     ierr = PetscSectionSetUp(subCoordSection);CHKERRQ(ierr);
     ierr = PetscSectionGetStorageSize(subCoordSection, &coordSize);CHKERRQ(ierr);
-    ierr = VecCreate(comm, &subCoordinates);CHKERRQ(ierr);
+    ierr = VecCreate(PETSC_COMM_SELF, &subCoordinates);CHKERRQ(ierr);
     ierr = PetscObjectGetName((PetscObject)coordinates,&name);CHKERRQ(ierr);
     ierr = PetscObjectSetName((PetscObject)subCoordinates,name);CHKERRQ(ierr);
     ierr = VecSetSizes(subCoordinates, coordSize, PETSC_DETERMINE);CHKERRQ(ierr);
@@ -2944,7 +2944,7 @@ static PetscErrorCode DMPlexCreateSubmeshGeneric_Interpolated(DM dm, DMLabel lab
     }
     ierr = PetscSectionSetUp(subCoordSection);CHKERRQ(ierr);
     ierr = PetscSectionGetStorageSize(subCoordSection, &coordSize);CHKERRQ(ierr);
-    ierr = VecCreate(comm, &subCoordinates);CHKERRQ(ierr);
+    ierr = VecCreate(PETSC_COMM_SELF, &subCoordinates);CHKERRQ(ierr);
     ierr = PetscObjectGetName((PetscObject)coordinates,&name);CHKERRQ(ierr);
     ierr = PetscObjectSetName((PetscObject)subCoordinates,name);CHKERRQ(ierr);
     ierr = VecSetSizes(subCoordinates, coordSize, PETSC_DETERMINE);CHKERRQ(ierr);
@@ -3208,7 +3208,7 @@ static PetscErrorCode DMPlexCreateCohesiveSubmesh_Uninterpolated(DM dm, PetscBoo
     }
     ierr = PetscSectionSetUp(subCoordSection);CHKERRQ(ierr);
     ierr = PetscSectionGetStorageSize(subCoordSection, &coordSize);CHKERRQ(ierr);
-    ierr = VecCreate(comm, &subCoordinates);CHKERRQ(ierr);
+    ierr = VecCreate(PETSC_COMM_SELF, &subCoordinates);CHKERRQ(ierr);
     ierr = PetscObjectGetName((PetscObject)coordinates,&name);CHKERRQ(ierr);
     ierr = PetscObjectSetName((PetscObject)subCoordinates,name);CHKERRQ(ierr);
     ierr = VecSetSizes(subCoordinates, coordSize, PETSC_DETERMINE);CHKERRQ(ierr);
