@@ -6,11 +6,11 @@
 #undef __FUNCT__
 #define __FUNCT__ "DMPlexMetricReduction2d_Internal"
 // metric given as upper triangular matrix mat
-PetscErrorCode DMPlexMetricReduction3d_Internal(PetscReal * mat, PetscReal * eigVal, PetscReal * eigVec) 
+PetscErrorCode DMPlexMetricReduction3d_Internal(PetscReal * met, PetscReal * eigVal, PetscReal * eigVec) 
 {
   
   int    i, k, cas;
-  double nrm;
+  double nrm, mat[6];
   double a, b, c, d, ap, bp, cp, alpha, beta, lbd1, lbd2, lbd3, delta, eps;
   double px, ppx, x0, x1, xmin, pmin, p[3], tmp; 
   double w1[3], w2[3], w3[3], v1[3], v2[3], v3[3];
@@ -20,6 +20,9 @@ PetscErrorCode DMPlexMetricReduction3d_Internal(PetscReal * mat, PetscReal * eig
   double us3 = 1./3;
   
   PetscFunctionBegin;
+
+  for (i=0; i<6; ++i) 
+    mat[i] = met[i];
 
   nrm = fabs(mat[0]);
   for (i=1; i<6; ++i)
@@ -445,7 +448,7 @@ static inline double getMatInv3(double *mat, double *matInv)
     fprintf(stderr,"	        [%12.8e  %12.8e  %12.8e]\n",mat[0],mat[1],mat[2]);
     fprintf(stderr,"     M  = [%12.8e  %12.8e  %12.8e]  with  det = %12.8e\n",mat[3],mat[4],mat[5],det);
     fprintf(stderr,"          [%12.8e  %12.8e  %12.8e]\n",mat[6],mat[7],mat[8]);
-    return 0;
+    exit(1);
   }
   detInv = 1./det;
   
@@ -766,33 +769,26 @@ PetscErrorCode metricIntersection3d(double* metric1, double* metric2, double* me
     met1[i] = metric1[i]; 
     met2[i] = metric2[i]; 
   }
+
+//  printf("DEBUG      met1: %f %f %f   met2: %f %f %f\n", met1[0], met1[3], met1[5], met2[0], met2[3], met2[5]);
   
 
   //--- First check for null metric
-  det1 = met1[0] * ( met1[3]*met1[5] - met1[4]*met1[4]) 
-       - met1[1] * ( met1[1]*met1[5] - met1[2]*met1[4]) 
-       + met1[2] * ( met1[1]*met1[4] - met1[2]*met1[3]);;
-  det2 = met2[0] * ( met2[3]*met2[5] - met2[4]*met2[4]) 
-       - met2[1] * ( met2[1]*met2[5] - met2[2]*met2[4]) 
-       + met2[2] * ( met2[1]*met2[4] - met2[2]*met2[3]);;
+  det1 = met1[0] * ( met1[3]*met1[5] - met1[4]*met1[4]) - met1[1] * ( met1[1]*met1[5] - met1[2]*met1[4]) + met1[2] * ( met1[1]*met1[4] - met1[2]*met1[3]);;
+  det2 = met2[0] * ( met2[3]*met2[5] - met2[4]*met2[4]) - met2[1] * ( met2[1]*met2[5] - met2[2]*met2[4]) + met2[2] * ( met2[1]*met2[4] - met2[2]*met2[3]);
   if ( det1 < detMin ) {
     if ( det2 < detMin ){
       //--- Both metric are zero => metNew = 0
-      for (i=0; i<6; ++i)
-        metNew[i] = 0.;
+      for (i=0; i<6; ++i) metNew[i] = 0.;
       return 3;      
     }
     else {
-      //--- copy Met2 in metNew
-      for (i=0; i<6; ++i) 
-        metNew[i] = met2[i];
+      for (i=0; i<6; ++i) metNew[i] = met2[i];
       return 3;
     }
   }
   if ( det2 < detMin ) {
-    //--- copy Met1 in metNew
-    for (i=0; i<6; ++i) 
-      metNew[i] = met1[i];
+    for (i=0; i<6; ++i) metNew[i] = met1[i];
     return 3;
   }
   
@@ -801,6 +797,11 @@ PetscErrorCode metricIntersection3d(double* metric1, double* metric2, double* me
   ierr = DMPlexMetricReduction3d_Internal(met1,eigVal1,eigVec1);CHKERRQ(ierr);  
   ierr = DMPlexMetricReduction3d_Internal(met2,eigVal2,eigVec2);CHKERRQ(ierr);
   
+//  printf("DEBUG        eigVal1: %f %f %f, eigVec1: %f %f %f  %f %f %f  %f %f %f\n", eigVal1[0], eigVal1[1], eigVal1[2],
+//    eigVec1[0], eigVec1[1], eigVec1[2], eigVec1[3], eigVec1[4], eigVec1[5], eigVec1[6], eigVec1[7], eigVec1[8]);
+//  printf("DEBUG        eigVal2: %f %f %f, eigVec2: %f %f %f  %f %f %f  %f %f %f\n", eigVal2[0], eigVal2[1], eigVal2[2],
+//    eigVec2[0], eigVec2[1], eigVec2[2], eigVec2[3], eigVec2[4], eigVec2[5], eigVec2[6], eigVec2[7], eigVec2[8]);
+
   
   //--- check for degenerate cases
   // -0- if M1 and M2 def > 0   => default
@@ -813,27 +814,21 @@ PetscErrorCode metricIntersection3d(double* metric1, double* metric2, double* me
   
   cpt[0] = cpt[1] = 0;
   for (i=0; i<3; ++i) {
-    if ( fabs(eigVal1[i]) < eigMin )
-      cpt[0]++;
-    if ( fabs(eigVal2[i]) < eigMin )
-      cpt[1]++;
+    if ( fabs(eigVal1[i]) < eigMin ) cpt[0]++;
+    if ( fabs(eigVal2[i]) < eigMin ) cpt[1]++;
   }
   
   if ( cpt[0] == 0 ) {
     if ( cpt[1] != 3 ) {    // case 0 and 4
       //- do nothing, normal case
-      for (i=0; i<3; ++i)
-        eigVal[i] = eigVal1[i];
-      for (i=0; i<9; ++i)
-        eigVec[i] = eigVec1[i];
+      for (i=0; i<3; ++i) eigVal[i] = eigVal1[i];
+      for (i=0; i<9; ++i) eigVec[i] = eigVec1[i];
     }
     else {                  // case 3
-      for (i=0; i<6; ++i)
-        metNew[i] = met1[i];
+      for (i=0; i<6; ++i) metNew[i] = met1[i];
       return 3;           
     }
   }
-  
   else if ( cpt[0] == 1 || cpt[0] == 2 ) {
     if ( cpt[1] == 0 ) {
       //- switch M1 and M2
@@ -842,36 +837,30 @@ PetscErrorCode metricIntersection3d(double* metric1, double* metric2, double* me
         met1[i] = met2[i];
         met2[i] = tmp;
       }
-      for (i=0; i<3; ++i)
-        eigVal[i] = eigVal2[i];
-      for (i=0; i<9; ++i)
-        eigVec[i] = eigVec2[i];
+      for (i=0; i<3; ++i) eigVal[i] = eigVal2[i];
+      for (i=0; i<9; ++i) eigVec[i] = eigVec2[i];
     }
     else if ( cpt[0] == 1 || cpt[0] == 2 ) {
       //--- Treat specific degenerate case
       intersectdegenerateCase3D(met1,eigVal1,eigVec1,met2,eigVal2,eigVec2,cpt,metNew);
       return 3;
     }
-    else {                  // case 3
-      for (i=0; i<6; ++i)
-        metNew[i] = met1[i];
+    else { // case 3
+      for (i=0; i<6; ++i) metNew[i] = met1[i];
       return 3;           
     }
   }
-  
   else {
-    if ( cpt[1] != 3 ) {    // case 2
-      for (i=0; i<6; ++i)
-        metNew[i] = met2[i];
+    if ( cpt[1] != 3 ) { // case 2
+      for (i=0; i<6; ++i) metNew[i] = met2[i];
       return 3;           
     }
-    else {                  // case 1
-      for (i=0; i<6; ++i)
-        metNew[i] = 0.;
+    else {   // case 1
+      for (i=0; i<6; ++i) metNew[i] = 0.;
       return 3;           
     } 
   }
-  
+
   
   //--- Classic metric intersection with at least one non degenerate metric
   //--- Note that eigVec is the transpose of the transformation matrix P
@@ -882,6 +871,8 @@ PetscErrorCode metricIntersection3d(double* metric1, double* metric2, double* me
   for (i=0; i<3;++i) 
     eigVal[i] = sqrt(fabs(eigVal[i]));
   getMetric3(eigVal,eigVec,sqrtM1);
+
+//  printf("DEBUG        sqrtM1: %f %f %f %f %f %f\n", sqrtM1[0], sqrtM1[1], sqrtM1[2], sqrtM1[3], sqrtM1[4], sqrtM1[5]);
   
 
   //- Compute 1./sqrt(Lbd_M1) ~> M1^(-1/2)  (in the canonical basis)
@@ -889,10 +880,12 @@ PetscErrorCode metricIntersection3d(double* metric1, double* metric2, double* me
     eigVal[i] = 1./eigVal[i];
   getMetric3(eigVal,eigVec,sqrtInvM1);
 
+//  printf("DEBUG        sqrtInvM1: %f %f %f %f %f %f\n", sqrtInvM1[0], sqrtInvM1[1], sqrtInvM1[2], sqrtInvM1[3], sqrtInvM1[4], sqrtInvM1[5]);
+
   
   //--- Compute M2bar = M1^(-1/2) * M2 * M1^(-1/2)
   matrixProduct_SMS(sqrtInvM1,met2,M2bar);
-
+//  printf("DEBUG        M2bar: %f %f %f %f %f %f\n", M2bar[0], M2bar[1], M2bar[2], M2bar[3], M2bar[4], M2bar[5]);
 
   //--- Spectral decomposition of M2bar 
   ierr = DMPlexMetricReduction3d_Internal(M2bar,eigVal,eigVec);CHKERRQ(ierr);
@@ -932,7 +925,7 @@ static inline double product3d(double * V, double * Met) {
 #define __FUNCT__ "DMPlexMetricGradation2d_Internal"
 PetscErrorCode DMPlexMetricGradation3d_Internal(DM dm, PetscReal * metric, PetscReal * x, PetscReal * y, PetscReal * z) {
   
-  PetscReal         beta = 1.2;
+  PetscReal         beta = 1.4;
   
   PetscBool         correction;
   PetscInt        * verTag, eStart, eEnd, numEdges, vStart, vEnd, numVertices;
@@ -948,6 +941,7 @@ PetscErrorCode DMPlexMetricGradation3d_Internal(DM dm, PetscReal * metric, Petsc
 
   ierr = DMPlexGetDepthStratum(dm, 1, &eStart, &eEnd);CHKERRQ(ierr);
   numEdges = eEnd - eStart;
+  printf("DEBUG  numEdges: %d\n", numEdges);
   ierr = DMPlexGetDepthStratum(dm, 0, &vStart, &vEnd);CHKERRQ(ierr);
   numVertices = vEnd - vStart;
   
@@ -959,6 +953,7 @@ PetscErrorCode DMPlexMetricGradation3d_Internal(DM dm, PetscReal * metric, Petsc
   correction = PETSC_TRUE;
   iteCor = 0;
   while (correction && iteCor < 500) {
+//    printf("DEBUG  iteCor: %d\n", iteCor);
     iteCor++;
     correction = PETSC_FALSE;
     for (e = eStart; e < eEnd; ++e) {
@@ -969,6 +964,8 @@ PetscErrorCode DMPlexMetricGradation3d_Internal(DM dm, PetscReal * metric, Petsc
       iMet1 = 9*iVer1; 
       iMet2 = 9*iVer2;
       
+//      printf("DEBUG  iEdg: %d,  iVer1, iVer2: %d %d,  ver: [%f %f %f], [%f %f %f]\n", e-eStart, iVer1, iVer2, x[iVer1], y[iVer1], z[iVer1], x[iVer2], y[iVer2], z[iVer2]);
+
       if (verTag[iVer1] < iteCor && verTag[iVer2] < iteCor) continue;
 
       v12[0] = x[iVer2]-x[iVer1];
@@ -985,6 +982,8 @@ PetscErrorCode DMPlexMetricGradation3d_Internal(DM dm, PetscReal * metric, Petsc
                                met2[3] = metric[iMet2+4]; met2[4] = metric[iMet2+5];
                                                           met2[5] = metric[iMet2+8];
 
+//      printf("DEBUG      met1: %f %f %f   met2: %f %f %f\n", met1[0], met1[3], met1[5], met2[0], met2[3], met2[5]);
+
       lengthEdge1 = sqrt(product3d(v12, met1)); 
       lengthEdge2 = sqrt(product3d(v21, met2));
       eta2_12 = 1+lengthEdge1*ln_beta;
@@ -997,9 +996,14 @@ PetscErrorCode DMPlexMetricGradation3d_Internal(DM dm, PetscReal * metric, Petsc
         grownMet1[i] = eta2_12*met1[i];
         grownMet2[i] = eta2_21*met2[i];
       }
+
+//      printf("DEBUG      grownMet1: %f %f %f   grownMet2: %f %f %f\n", grownMet1[0], grownMet1[3], grownMet1[5], grownMet2[0], grownMet2[3], grownMet2[5]);
       
       metricIntersection3d(met1, grownMet2, metNew1); // intersect M1 and eta12*M2
       metricIntersection3d(met2, grownMet1, metNew2);
+
+//      printf("DEBUG      metNew1: %f %f %f   metNew2: %f %f %f\n", metNew1[0], metNew1[3], metNew1[5], metNew2[0], metNew2[3], metNew2[5]);
+
 
       // compute norm met-metnew for each edge end
       // if norm > 1e-3, tag = 1, correction = PETSC_TRUE
@@ -1014,8 +1018,10 @@ PetscErrorCode DMPlexMetricGradation3d_Internal(DM dm, PetscReal * metric, Petsc
         verTag[iVer1] = iteCor+1;
         correction = PETSC_TRUE;
       }
-      diff = fabs(met2[0]-metNew2[0])+fabs(met2[1]-metNew2[1])+fabs(met2[2]-metNew2[2]);
-      diff /= (fabs(met2[0])+fabs(met2[1])+fabs(met2[2]));
+      diff = 0;
+      for (i=0; i<6; ++i) 
+        diff += fabs(met2[i]-metNew2[i]);
+      diff /= (fabs(met2[0])+fabs(met2[1])+fabs(met2[2])+fabs(met2[3])+fabs(met2[4])+fabs(met2[5]));
       if (diff > 1.e-3) {
         metric[iMet2]   = metNew2[0]; metric[iMet2+1] = metNew2[1]; metric[iMet2+2] = metNew2[2];
         metric[iMet2+3] = metNew2[1]; metric[iMet2+4] = metNew2[3]; metric[iMet2+5] = metNew2[4];
@@ -1023,9 +1029,11 @@ PetscErrorCode DMPlexMetricGradation3d_Internal(DM dm, PetscReal * metric, Petsc
         verTag[iVer2] = iteCor+1;
         correction = PETSC_TRUE;
       }
-
+      
+//      if (e-eStart > 2) break;
 
     }
+//    break;
   }  
 
 

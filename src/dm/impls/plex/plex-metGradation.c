@@ -322,7 +322,7 @@ static inline double product(double * V, double * Met) {
 #define __FUNCT__ "DMPlexMetricGradation2d_Internal"
 PetscErrorCode DMPlexMetricGradation2d_Internal(DM dm, PetscReal * metric, PetscReal * x, PetscReal * y) {
   
-  PetscReal         beta = 1.2;
+  PetscReal         beta = 1.4;
   
   PetscBool         correction;
   PetscInt        * verTag, eStart, eEnd, numEdges, vStart, vEnd, numVertices;
