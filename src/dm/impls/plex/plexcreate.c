@@ -488,12 +488,12 @@ static PetscErrorCode DMPlexCreateCubeMesh_Internal(DM dm, const PetscReal lower
     markerLeft   = faceMarkerLeft;
   }
   {
-    const PetscInt numXEdges    = !rank ? edges[0]   : 0;
-    const PetscInt numYEdges    = !rank ? edges[1]   : 0;
-    const PetscInt numZEdges    = !rank ? edges[2]   : 0;
+    const PetscInt numXEdges    = !rank ? edges[0] : 0;
+    const PetscInt numYEdges    = !rank ? edges[1] : 0;
+    const PetscInt numZEdges    = !rank ? edges[2] : 0;
     const PetscInt numXVertices = !rank ? (bdX == DM_BOUNDARY_PERIODIC || bdX == DM_BOUNDARY_TWIST ? edges[0] : edges[0]+1) : 0;
     const PetscInt numYVertices = !rank ? (bdY == DM_BOUNDARY_PERIODIC || bdY == DM_BOUNDARY_TWIST ? edges[1] : edges[1]+1) : 0;
-    const PetscInt numZVertices = !rank ? (bdZ == DM_BOUNDARY_PERIODIC || bdY == DM_BOUNDARY_TWIST ? edges[2] : edges[2]+1) : 0;
+    const PetscInt numZVertices = !rank ? (bdZ == DM_BOUNDARY_PERIODIC || bdZ == DM_BOUNDARY_TWIST ? edges[2] : edges[2]+1) : 0;
     const PetscInt numCells     = numXEdges*numYEdges*numZEdges;
     const PetscInt numXFaces    = numYEdges*numZEdges;
     const PetscInt numYFaces    = numXEdges*numZEdges;
@@ -544,8 +544,8 @@ static PetscErrorCode DMPlexCreateCubeMesh_Internal(DM dm, const PetscReal lower
           PetscInt faceL   = firstXFace + (fz*numYEdges+fy)*numXVertices +   fx;
           PetscInt faceR   = firstXFace + (fz*numYEdges+fy)*numXVertices + ((fx+1)%numXVertices);
                             /* B,  T,  F,  K,  R,  L */
-          PetscInt ornt[8] = {-4,  0,  0, -1,  0, -4}; /* ??? */
-          PetscInt cone[8];
+          PetscInt ornt[6] = {-4,  0,  0, -1,  0, -4}; /* ??? */
+          PetscInt cone[6];
 
           /* no boundary twisting in 3D */
           cone[0] = faceB; cone[1] = faceT; cone[2] = faceF; cone[3] = faceK; cone[4] = faceR; cone[5] = faceL;
@@ -587,7 +587,7 @@ static PetscErrorCode DMPlexCreateCubeMesh_Internal(DM dm, const PetscReal lower
     }
     /* Build y faces */
     for (fz = 0; fz < numZEdges; ++fz) {
-      for (fx = 0; fx < numYEdges; ++fx) {
+      for (fx = 0; fx < numXEdges; ++fx) {
         for (fy = 0; fy < numYVertices; ++fy) {
           PetscInt face    = firstYFace + (fz*numXEdges+fx)*numYVertices + fy;
           PetscInt edgeL   = firstZEdge + (fy*numXVertices+  fx                 )*numZEdges + fz;
@@ -961,10 +961,11 @@ PetscErrorCode DMPlexCreateBoxMesh(MPI_Comm comm, PetscInt dim, PetscInt numFace
 @*/
 PetscErrorCode DMPlexCreateHexBoxMesh(MPI_Comm comm, PetscInt dim, const PetscInt cells[], DMBoundaryType periodicX, DMBoundaryType periodicY, DMBoundaryType periodicZ, DM *dm)
 {
+  PetscInt       i;
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  PetscValidPointer(dm, 4);
+  PetscValidPointer(dm, 7);
   ierr = DMCreate(comm, dm);CHKERRQ(ierr);
   PetscValidLogicalCollectiveInt(*dm,dim,2);
   ierr = DMSetType(*dm, DMPLEX);CHKERRQ(ierr);
@@ -976,6 +977,21 @@ PetscErrorCode DMPlexCreateHexBoxMesh(MPI_Comm comm, PetscInt dim, const PetscIn
     PetscReal upper[2] = {1.0, 1.0};
 
     ierr = DMPlexCreateSquareMesh(*dm, lower, upper, cells, periodicX, periodicY);CHKERRQ(ierr);
+    if (periodicX == DM_BOUNDARY_PERIODIC || periodicX == DM_BOUNDARY_TWIST ||
+        periodicY == DM_BOUNDARY_PERIODIC || periodicY == DM_BOUNDARY_TWIST) {
+      PetscReal      L[2];
+      PetscReal      maxCell[2];
+      DMBoundaryType bdType[2];
+
+      bdType[0] = periodicX;
+      bdType[1] = periodicY;
+      for (i = 0; i < dim; i++) {
+        L[i]       = upper[i] - lower[i];
+        maxCell[i] = 1.1 * (L[i] / cells[i]);
+      }
+
+      ierr = DMSetPeriodicity(*dm,maxCell,L,bdType);CHKERRQ(ierr);
+    }
     break;
   }
   case 3:
@@ -984,6 +1000,23 @@ PetscErrorCode DMPlexCreateHexBoxMesh(MPI_Comm comm, PetscInt dim, const PetscIn
     PetscReal upper[3] = {1.0, 1.0, 1.0};
 
     ierr = DMPlexCreateCubeMesh_Internal(*dm, lower, upper, cells, periodicX, periodicY, periodicZ);CHKERRQ(ierr);
+    if (periodicX == DM_BOUNDARY_PERIODIC || periodicX == DM_BOUNDARY_TWIST ||
+        periodicY == DM_BOUNDARY_PERIODIC || periodicY == DM_BOUNDARY_TWIST ||
+        periodicZ == DM_BOUNDARY_PERIODIC || periodicZ == DM_BOUNDARY_TWIST) {
+      PetscReal      L[3];
+      PetscReal      maxCell[3];
+      DMBoundaryType bdType[3];
+
+      bdType[0] = periodicX;
+      bdType[1] = periodicY;
+      bdType[2] = periodicZ;
+      for (i = 0; i < dim; i++) {
+        L[i]       = upper[i] - lower[i];
+        maxCell[i] = 1.1 * (L[i] / cells[i]);
+      }
+
+      ierr = DMSetPeriodicity(*dm,maxCell,L,bdType);CHKERRQ(ierr);
+    }
     break;
   }
   default:
@@ -1013,7 +1046,8 @@ extern PetscErrorCode DMCreateSubDM_Plex(DM dm, PetscInt numFields, PetscInt fie
 extern PetscErrorCode DMLocatePoints_Plex(DM dm, Vec v, DMPointLocationType ltype, PetscSF cellSF);
 extern PetscErrorCode DMProjectFunctionLocal_Plex(DM,PetscReal,PetscErrorCode(**)(PetscInt,PetscReal,const PetscReal[],PetscInt,PetscScalar *,void *),void **,InsertMode,Vec);
 extern PetscErrorCode DMProjectFunctionLabelLocal_Plex(DM,PetscReal,DMLabel,PetscInt,const PetscInt[],PetscErrorCode(**)(PetscInt,PetscReal,const PetscReal[],PetscInt,PetscScalar *,void *),void **,InsertMode,Vec);
-extern PetscErrorCode DMProjectFieldLocal_Plex(DM,Vec,void (**)(PetscInt,PetscInt,PetscInt,const PetscInt[],const PetscInt[],const PetscScalar[],const PetscScalar[],const PetscScalar[],const PetscInt[],const PetscInt[],const PetscScalar[],const PetscScalar[],const PetscScalar[],PetscReal,const PetscReal[],PetscScalar[]),InsertMode,Vec);
+extern PetscErrorCode DMProjectFieldLocal_Plex(DM,PetscReal,Vec,void (**)(PetscInt,PetscInt,PetscInt,const PetscInt[],const PetscInt[],const PetscScalar[],const PetscScalar[],const PetscScalar[],const PetscInt[],const PetscInt[],const PetscScalar[],const PetscScalar[],const PetscScalar[],PetscReal,const PetscReal[],PetscScalar[]),InsertMode,Vec);
+extern PetscErrorCode DMProjectFieldLabelLocal_Plex(DM,PetscReal,DMLabel,PetscInt,const PetscInt[],Vec,void (**)(PetscInt,PetscInt,PetscInt,const PetscInt[],const PetscInt[],const PetscScalar[],const PetscScalar[],const PetscScalar[],const PetscInt[],const PetscInt[],const PetscScalar[],const PetscScalar[],const PetscScalar[],PetscReal,const PetscReal[],PetscScalar[]),InsertMode,Vec);
 extern PetscErrorCode DMComputeL2Diff_Plex(DM,PetscReal,PetscErrorCode(**)(PetscInt,PetscReal,const PetscReal[],PetscInt,PetscScalar *,void *),void **,Vec,PetscReal *);
 extern PetscErrorCode DMComputeL2GradientDiff_Plex(DM,PetscReal,PetscErrorCode(**)(PetscInt,PetscReal,const PetscReal[], const PetscReal[],PetscInt,PetscScalar *,void *),void **,Vec,const PetscReal [],PetscReal *);
 extern PetscErrorCode DMComputeL2FieldDiff_Plex(DM,PetscReal,PetscErrorCode(**)(PetscInt,PetscReal,const PetscReal[],PetscInt,PetscScalar *,void *),void **,Vec,PetscReal *);
@@ -1326,6 +1360,7 @@ PetscErrorCode DMInitialize_Plex(DM dm)
   dm->ops->projectfunctionlocal            = DMProjectFunctionLocal_Plex;
   dm->ops->projectfunctionlabellocal       = DMProjectFunctionLabelLocal_Plex;
   dm->ops->projectfieldlocal               = DMProjectFieldLocal_Plex;
+  dm->ops->projectfieldlabellocal          = DMProjectFieldLabelLocal_Plex;
   dm->ops->computel2diff                   = DMComputeL2Diff_Plex;
   dm->ops->computel2gradientdiff           = DMComputeL2GradientDiff_Plex;
   dm->ops->computel2fielddiff              = DMComputeL2FieldDiff_Plex;

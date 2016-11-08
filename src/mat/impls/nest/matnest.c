@@ -145,6 +145,59 @@ static PetscErrorCode MatMultTransposeAdd_Nest(Mat A,Vec x,Vec y,Vec z)
 }
 
 #undef __FUNCT__
+#define __FUNCT__ "MatTranspose_Nest"
+static PetscErrorCode MatTranspose_Nest(Mat A,MatReuse reuse,Mat *B)
+{
+  Mat_Nest       *bA = (Mat_Nest*)A->data, *bC;
+  Mat            C;
+  PetscInt       i,j,nr = bA->nr,nc = bA->nc;
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  if (reuse == MAT_REUSE_MATRIX && A == *B && nr != nc) SETERRQ(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_SIZ,"Square nested matrix only for in-place");
+
+  if (reuse == MAT_INITIAL_MATRIX || A == *B) {
+    Mat *subs;
+    IS  *is_row,*is_col;
+
+    ierr = PetscCalloc1(nr * nc,&subs);CHKERRQ(ierr);
+    ierr = PetscMalloc2(nr,&is_row,nc,&is_col);CHKERRQ(ierr);
+    ierr = MatNestGetISs(A,is_row,is_col);CHKERRQ(ierr);
+    if (reuse == MAT_REUSE_MATRIX) {
+      for (i=0; i<nr; i++) {
+        for (j=0; j<nc; j++) {
+          subs[i + nr * j] = bA->m[i][j];
+        }
+      }
+    }
+
+    ierr = MatCreateNest(PetscObjectComm((PetscObject)A),nc,is_col,nr,is_row,subs,&C);CHKERRQ(ierr);
+    ierr = PetscFree(subs);CHKERRQ(ierr);
+    ierr = PetscFree2(is_row,is_col);CHKERRQ(ierr);
+  } else {
+    C = *B;
+  }
+
+  bC = (Mat_Nest*)C->data;
+  for (i=0; i<nr; i++) {
+    for (j=0; j<nc; j++) {
+      if (bA->m[i][j]) {
+        ierr = MatTranspose(bA->m[i][j], reuse, &(bC->m[j][i]));CHKERRQ(ierr);
+      } else {
+        bC->m[j][i] = NULL;
+      }
+    }
+  }
+
+  if (reuse == MAT_INITIAL_MATRIX || A != *B) {
+    *B = C;
+  } else {
+    ierr = MatHeaderMerge(A, &C);CHKERRQ(ierr);
+  }
+  PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
 #define __FUNCT__ "MatNestDestroyISList"
 static PetscErrorCode MatNestDestroyISList(PetscInt n,IS **list)
 {
@@ -370,7 +423,18 @@ static PetscErrorCode MatNestFindSubMat(Mat A,struct MatNestISPair *is,IS isrow,
   } else {
     ierr = MatNestFindIS(A,vs->nr,is->row,isrow,&row);CHKERRQ(ierr);
     ierr = MatNestFindIS(A,vs->nc,is->col,iscol,&col);CHKERRQ(ierr);
-    *B   = vs->m[row][col];
+    if (!vs->m[row][col]) {
+      PetscInt lr,lc;
+
+      ierr = MatCreate(PetscObjectComm((PetscObject)A),&vs->m[row][col]);CHKERRQ(ierr);
+      ierr = ISGetLocalSize(vs->isglobal.row[row],&lr);CHKERRQ(ierr);
+      ierr = ISGetLocalSize(vs->isglobal.col[col],&lc);CHKERRQ(ierr);
+      ierr = MatSetSizes(vs->m[row][col],lr,lc,PETSC_DECIDE,PETSC_DECIDE);CHKERRQ(ierr);
+      ierr = MatSetUp(vs->m[row][col]);CHKERRQ(ierr);
+      ierr = MatAssemblyBegin(vs->m[row][col],MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+      ierr = MatAssemblyEnd(vs->m[row][col],MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+    }
+    *B = vs->m[row][col];
   }
   PetscFunctionReturn(0);
 }
@@ -529,6 +593,45 @@ static PetscErrorCode MatShift_Nest(Mat A,PetscScalar a)
 }
 
 #undef __FUNCT__
+#define __FUNCT__ "MatDiagonalSet_Nest"
+static PetscErrorCode MatDiagonalSet_Nest(Mat A,Vec D,InsertMode is)
+{
+  Mat_Nest       *bA = (Mat_Nest*)A->data;
+  PetscInt       i;
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  for (i=0; i<bA->nr; i++) {
+    Vec bv;
+    ierr = VecGetSubVector(D,bA->isglobal.row[i],&bv);CHKERRQ(ierr);
+    if (bA->m[i][i]) {
+      ierr = MatDiagonalSet(bA->m[i][i],bv,is);CHKERRQ(ierr);
+    }
+    ierr = VecRestoreSubVector(D,bA->isglobal.row[i],&bv);CHKERRQ(ierr);
+  }
+  PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
+#define __FUNCT__ "MatSetRandom_Nest"
+static PetscErrorCode MatSetRandom_Nest(Mat A,PetscRandom rctx)
+{
+  Mat_Nest       *bA = (Mat_Nest*)A->data;
+  PetscInt       i,j;
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  for (i=0; i<bA->nr; i++) {
+    for (j=0; j<bA->nc; j++) {
+      if (bA->m[i][j]) {
+        ierr = MatSetRandom(bA->m[i][j],rctx);CHKERRQ(ierr);
+      }
+    }
+  }
+  PetscFunctionReturn(0);
+}
+
+#undef __FUNCT__
 #define __FUNCT__ "MatCreateVecs_Nest"
 static PetscErrorCode MatCreateVecs_Nest(Mat A,Vec *right,Vec *left)
 {
@@ -598,11 +701,11 @@ static PetscErrorCode MatView_Nest(Mat A,PetscViewer viewer)
   ierr = PetscObjectTypeCompare((PetscObject)viewer,PETSCVIEWERASCII,&isascii);CHKERRQ(ierr);
   if (isascii) {
 
-    PetscViewerASCIIPrintf(viewer,"Matrix object: \n");
-    PetscViewerASCIIPushTab(viewer);    /* push0 */
-    PetscViewerASCIIPrintf(viewer, "type=nest, rows=%d, cols=%d \n",bA->nr,bA->nc);
+    ierr = PetscViewerASCIIPrintf(viewer,"Matrix object: \n");CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPushTab(viewer);CHKERRQ(ierr);
+    ierr = PetscViewerASCIIPrintf(viewer, "type=nest, rows=%D, cols=%D \n",bA->nr,bA->nc);CHKERRQ(ierr);
 
-    PetscViewerASCIIPrintf(viewer,"MatNest structure: \n");
+    ierr = PetscViewerASCIIPrintf(viewer,"MatNest structure: \n");CHKERRQ(ierr);
     for (i=0; i<bA->nr; i++) {
       for (j=0; j<bA->nc; j++) {
         MatType   type;
@@ -611,7 +714,7 @@ static PetscErrorCode MatView_Nest(Mat A,PetscViewer viewer)
         PetscBool isNest = PETSC_FALSE;
 
         if (!bA->m[i][j]) {
-          PetscViewerASCIIPrintf(viewer, "(%D,%D) : NULL \n",i,j);
+          CHKERRQ(ierr);PetscViewerASCIIPrintf(viewer, "(%D,%D) : NULL \n",i,j);CHKERRQ(ierr);
           continue;
         }
         ierr = MatGetSize(bA->m[i][j],&NR,&NC);CHKERRQ(ierr);
@@ -629,7 +732,7 @@ static PetscErrorCode MatView_Nest(Mat A,PetscViewer viewer)
         }
       }
     }
-    PetscViewerASCIIPopTab(viewer);    /* pop0 */
+    ierr = PetscViewerASCIIPopTab(viewer);CHKERRQ(ierr);    /* pop0 */
   }
   PetscFunctionReturn(0);
 }
@@ -1565,6 +1668,7 @@ PETSC_EXTERN PetscErrorCode MatCreate_Nest(Mat A)
   A->ops->multadd               = MatMultAdd_Nest;
   A->ops->multtranspose         = MatMultTranspose_Nest;
   A->ops->multtransposeadd      = MatMultTransposeAdd_Nest;
+  A->ops->transpose             = MatTranspose_Nest;
   A->ops->assemblybegin         = MatAssemblyBegin_Nest;
   A->ops->assemblyend           = MatAssemblyEnd_Nest;
   A->ops->zeroentries           = MatZeroEntries_Nest;
@@ -1580,6 +1684,8 @@ PETSC_EXTERN PetscErrorCode MatCreate_Nest(Mat A)
   A->ops->diagonalscale         = MatDiagonalScale_Nest;
   A->ops->scale                 = MatScale_Nest;
   A->ops->shift                 = MatShift_Nest;
+  A->ops->diagonalset           = MatDiagonalSet_Nest;
+  A->ops->setrandom             = MatSetRandom_Nest;
 
   A->spptr        = 0;
   A->assembled    = PETSC_FALSE;

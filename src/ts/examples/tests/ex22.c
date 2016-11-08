@@ -69,8 +69,8 @@ PetscErrorCode InitialConditions(Vec U,DM da,AppCtx *app)
 }
 
 #undef __FUNCT__
-#define __FUNCT__ "PetscEventFunction"
-PetscErrorCode PetscEventFunction(TS ts,PetscReal t,Vec U,PetscScalar *fvalue,void *ctx)
+#define __FUNCT__ "EventFunction"
+PetscErrorCode EventFunction(TS ts,PetscReal t,Vec U,PetscScalar *fvalue,void *ctx)
 {
   AppCtx            *app=(AppCtx*)ctx;
   PetscErrorCode    ierr;
@@ -219,6 +219,8 @@ int main(int argc,char **argv)
   ierr = PetscOptionsEnd();CHKERRQ(ierr);
 
   ierr = DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,-n,1,1,0,&da);CHKERRQ(ierr);
+  ierr = DMSetFromOptions(da);CHKERRQ(ierr);
+  ierr = DMSetUp(da);CHKERRQ(ierr);
   ierr = DMDASetUniformCoordinates(da,0.0,1.0,0,0,0,0);CHKERRQ(ierr);
   /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     Create necessary matrix and vectors

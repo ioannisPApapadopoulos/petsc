@@ -1,9 +1,9 @@
 ALL: lib
 
-CPPFLAGS =
+CPPFLAGS = ${NETCFD_INCLUDE} ${EXODUSII_INCLUDE}
 CFLAGS   =
 FFLAGS   =
-SOURCEC  = plexcreate.c plex.c plexpartition.c plexdistribute.c plexrefine.c plexadapt.c plexcoarsen.c plexinterpolate.c plexpreallocate.c plexreorder.c plexgeometry.c plexsubmesh.c plexhdf5.c plexexodusii.c plexgmsh.c plexfluent.c plexcgns.c plexvtk.c plexpoint.c plexvtu.c plexgmf.c plexgmf3d.c libmesh6.c plexfem.c plexfvm.c plexindices.c plextree.c plexgenerate.c plexorient.c plexnatural.c plex-metGradation.c plex-metGradation3d.c
+SOURCEC  = plexcreate.c plex.c plexpartition.c plexdistribute.c plexrefine.c plexadapt.c plexcoarsen.c plexinterpolate.c plexpreallocate.c plexreorder.c plexgeometry.c plexsubmesh.c plexhdf5.c plexexodusii.c plexgmsh.c plexfluent.c plexcgns.c plexvtk.c plexpoint.c plexvtu.c plexgmf.c plexgmf3d.c libmesh6.c plexfem.c plexfvm.c plexindices.c plextree.c plexgenerate.c plexorient.c plexnatural.c plex-metGradation.c plex-metGradation3d.c plexproject.c
 SOURCEF  =
 SOURCEH  =
 DIRS     = examples
