@@ -228,7 +228,7 @@ PetscErrorCode DMPlexWrite_gmfMesh3d(DM dm, PetscBool writeMesh, const char bdLa
 
     ierr = PetscFree(buffer);CHKERRQ(ierr);
     if ( !GmfCloseMesh(solIndex) ) {
-      fprintf(stderr,"#### ERROR: mesh file %s cannot be closed\n",fileName);
+      fprintf(stderr,"#### ERROR: solution file %s cannot be closed\n",fileName);
       exit(1);
     }
 
@@ -462,6 +462,7 @@ PetscErrorCode DMPlexReadGmfSolFromFile_3d(DM dm, PetscSection section, const ch
     VecSetValues(*sol, locSolSize, ix, buffer, INSERT_VALUES);
     
   }
+  GmfCloseMesh(solIndex);
   ierr = PetscFree2(buffer, ix);CHKERRQ(ierr);
   VecAssemblyBegin(*sol);
   VecAssemblyEnd(*sol);
