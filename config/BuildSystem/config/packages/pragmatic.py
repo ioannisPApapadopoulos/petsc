@@ -5,7 +5,7 @@ class Configure(config.package.CMakePackage):
     import os
     config.package.CMakePackage.__init__(self, framework)
     self.download          = ['git://https://github.com/meshadaptation/pragmatic.git']
-    self.gitcommit         = '66f8c14015e46ebb324bb0abb6ac1ec1830ced02'
+    self.gitcommit         = 'bcd028af4a2e6bf1f89ca1ffe45c0f165da118a7'
     self.functions         = ['pragmatic_2d_init']
     self.includes          = ['pragmatic.h']
     self.liblist           = [['libpragmatic.a']]
@@ -33,6 +33,7 @@ class Configure(config.package.CMakePackage):
     args.append('-DENABLE_VTK=OFF')
     args.append('-DENABLE_OPENMP=OFF')
     args.append('-DEIGEN_INCLUDE_DIR='+self.eigen.include[0])
+    args.append('-DCMAKE_BUILD_TYPE=Release')
     if self.checkSharedLibrariesEnabled():
       args.append('-DCMAKE_INSTALL_RPATH_USE_LINK_PATH:BOOL=ON')
     if self.indexTypes.integerSize == 64:
