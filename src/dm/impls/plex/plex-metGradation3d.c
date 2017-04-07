@@ -4,7 +4,7 @@
 
 
 #undef __FUNCT__
-#define __FUNCT__ "DMPlexMetricReduction2d_Internal"
+#define __FUNCT__ "DMPlexMetricReduction3d_Internal"
 // metric given as upper triangular matrix mat
 PetscErrorCode DMPlexMetricReduction3d_Internal(PetscReal * met, PetscReal * eigVal, PetscReal * eigVec) 
 {
