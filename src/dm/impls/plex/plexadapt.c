@@ -503,9 +503,14 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
   pragmatic_set_regions(cellIds);
   pragmatic_set_internal_boundaries();
 /******************/
+  printf("DEBUG  -- metric gradation\n");
+  if (dim == 2)  { ierr = DMPlexMetricGradation2d_Internal(dm, metric, x, y);CHKERRQ(ierr); }
+  else  { ierr = DMPlexMetricGradation3d_Internal(dm, metric, x, y, z);CHKERRQ(ierr); }
   pragmatic_set_metric(metric);
+  printf("DEBUG  -- calling pragmatic\n");
   pragmatic_adapt(((DM_Plex *) dm->data)->remeshBd ? 1 : 0, 0);
   ierr = PetscFree(l2gv);CHKERRQ(ierr);
+  printf("DEBUG  -- end pragmatic\n");
   /* Read out mesh */
   pragmatic_get_info_mpi(&numVerticesNew, &numCellsNew);
   ierr = PetscMalloc1(numVerticesNew*dim, &coordsNew);CHKERRQ(ierr);
