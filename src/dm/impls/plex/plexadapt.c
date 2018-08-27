@@ -1,6 +1,6 @@
 #include <petsc/private/dmpleximpl.h>   /*I      "petscdmplex.h"   I*/
 #if defined(PETSC_HAVE_PRAGMATIC)
-#include <pragmatic/cpragmatic.h>
+#include <cpragmatic.h>
 #endif
 
 static PetscErrorCode DMPlexLabelToVolumeConstraint(DM dm, DMLabel adaptLabel, PetscInt cStart, PetscInt cEnd, PetscReal refRatio, PetscReal maxVolumes[])
