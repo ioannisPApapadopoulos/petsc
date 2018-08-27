@@ -22,7 +22,7 @@ class Configure(config.package.CMakePackage):
     self.metis           = framework.require('config.packages.metis', self)
     self.eigen           = framework.require('config.packages.eigen', self)
     self.mathlib         = framework.require('config.packages.mathlib',self)
-    self.deps            = [self.metis, self.eigen, self.mathlib]
+    self.deps            = [self.eigen, self.mathlib]
     return
 
   def formCMakeConfigureArgs(self):
