@@ -480,6 +480,7 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
       ierr = DMLabelGetValue(rgLabel, c+cStart, &cellIds[c]);CHKERRQ(ierr);
     }
   }
+  else {cellIds = NULL;}
 /************************* */
   /* Get metric */
   ierr = VecViewFromOptions(vertexMetric, NULL, "-adapt_metric_view");CHKERRQ(ierr);
@@ -571,7 +572,7 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
   ierr = PetscFree(cellsNew);CHKERRQ(ierr);
   ierr = PetscFree5(x, y, z, metric, cells);CHKERRQ(ierr);
   ierr = PetscFree2(bdFaces, bdFaceIds);CHKERRQ(ierr);
-  ierr = PetscFree(cellIds);CHKERRQ(ierr);
+  if (cellIds) {ierr = PetscFree(cellIds);CHKERRQ(ierr);}
   ierr = PetscFree(coordsNew);CHKERRQ(ierr);
   pragmatic_finalize();
   PetscFunctionReturn(0);
