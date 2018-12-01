@@ -1443,6 +1443,77 @@ static PetscErrorCode PCPatchCreateCellPatchDiscretisationInfo(PC pc)
     ierr = PetscHMapIGetSize(ht, &dof);CHKERRQ(ierr);
     ierr = PetscSectionSetDof(gtolCounts, v, dof);CHKERRQ(ierr);
   }
+  if(patch->viewPatchStatistics) {
+      PetscInt dof, min, max, sum, count, off;
+      PetscHMapI htsizes;
+      PetscInt *sizes;
+      MPI_Comm comm = PetscObjectComm((PetscObject)pc);
+      ierr = PetscHMapICreate(&htsizes);CHKERRQ(ierr);
+      off = 0;
+
+      ierr = PetscSynchronizedPrintf(comm, "Number of patches: %i \n", vEnd-vStart); CHKERRQ(ierr);
+      ierr = PetscSynchronizedPrintf(comm, "Without Artificial (Patch size, count): \n"); CHKERRQ(ierr);
+      min = 1 << 30;
+      max = 0;
+      sum = 0;
+      for (v = vStart; v < vEnd; ++v) {
+        ierr = PetscSectionGetDof(gtolCounts, v, &dof);CHKERRQ(ierr);
+        if(dof < min) min = dof;
+        if(dof > max) max = dof;
+        sum += dof;
+        ierr = PetscHMapIGet(htsizes, dof, &count); CHKERRQ(ierr);
+        if(count == -1) {
+          ierr = PetscHMapISet(htsizes, dof, 1); CHKERRQ(ierr);
+        } else {
+          ierr = PetscHMapISet(htsizes, dof, count+1); CHKERRQ(ierr);
+        }
+        /*ierr = PetscSynchronizedPrintf(comm, "%i, ", dof); CHKERRQ(ierr);*/
+      }
+      ierr = PetscHMapIGetSize(htsizes, &count); CHKERRQ(ierr);
+      ierr = PetscMalloc1(count, &sizes); CHKERRQ(ierr);
+      ierr = PetscHMapIGetKeys(htsizes, &off, sizes);
+      ierr = PetscSortInt(count, sizes);
+      for(v=0; v<count; v++) {
+        PetscHMapIGet(htsizes, sizes[v], &dof);
+        ierr = PetscSynchronizedPrintf(comm, "%i, %i\n", sizes[v], dof); CHKERRQ(ierr);
+      }
+      ierr = PetscFree(sizes); CHKERRQ(ierr);
+      ierr = PetscHMapIClear(htsizes); CHKERRQ(ierr);
+      ierr = PetscSynchronizedPrintf(comm, "\nLargest, average, smallest patch: (%i, %.1f, %i)\n", max, sum/(PetscScalar)(vEnd-vStart), min); CHKERRQ(ierr);
+      if(patch->local_composition_type == PC_COMPOSITE_MULTIPLICATIVE) {
+        ierr = PetscSynchronizedPrintf(comm, "With Artificial (Patch size, count): \n"); CHKERRQ(ierr);
+        min = 1 << 30;
+        max = 0;
+        sum = 0;
+        for (v = vStart; v < vEnd; ++v) {
+          ierr = PetscSectionGetDof(gtolCountsWithArtificial, v, &dof);CHKERRQ(ierr);
+          if(dof < min) min = dof;
+          if(dof > max) max = dof;
+          sum += dof;
+          ierr = PetscHMapIGet(htsizes, dof, &count); CHKERRQ(ierr);
+          if(count == -1) {
+            ierr = PetscHMapISet(htsizes, dof, 1); CHKERRQ(ierr);
+          } else {
+            ierr = PetscHMapISet(htsizes, dof, count+1); CHKERRQ(ierr);
+          }
+          /*ierr = PetscSynchronizedPrintf(comm, "%i, ", dof); CHKERRQ(ierr);*/
+        }
+        ierr = PetscHMapIGetSize(htsizes, &count); CHKERRQ(ierr);
+        ierr = PetscMalloc1(count, &sizes); CHKERRQ(ierr);
+        off = 0;
+        ierr = PetscHMapIGetKeys(htsizes, &off, sizes);
+        ierr = PetscSortInt(count, sizes);
+        for(v=0; v<count; v++) {
+          PetscHMapIGet(htsizes, sizes[v], &dof);
+          ierr = PetscSynchronizedPrintf(comm, "%i, %i\n", sizes[v], dof); CHKERRQ(ierr);
+        }
+        ierr = PetscFree(sizes); CHKERRQ(ierr);
+        ierr = PetscHMapIClear(htsizes); CHKERRQ(ierr);
+        ierr = PetscSynchronizedPrintf(comm, "\nLargest, average, smallest patch: (%i, %.1f, %i)\n", max, sum/(PetscScalar)(vEnd-vStart), min); CHKERRQ(ierr);
+      }
+      ierr = PetscHMapIDestroy(&htsizes); CHKERRQ(ierr);
+      ierr = PetscSynchronizedFlush(comm, PETSC_STDOUT); CHKERRQ(ierr);
+  }
   if (globalIndex != numDofs) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_ARG_OUTOFRANGE, "Expected number of dofs (%d) doesn't match found number (%d)", numDofs, globalIndex);
   ierr = PetscSectionSetUp(gtolCounts);CHKERRQ(ierr);
   ierr = PetscSectionGetStorageSize(gtolCounts, &numGlobalDofs);CHKERRQ(ierr);
@@ -2995,6 +3066,8 @@ static PetscErrorCode PCSetFromOptions_PATCH(PetscOptionItems *PetscOptionsObjec
   ierr = PetscOptionsGetViewer(comm,((PetscObject) pc)->options, prefix, option, &patch->viewerSection, &patch->formatSection, &patch->viewSection);CHKERRQ(ierr);
   ierr = PetscSNPrintf(option, PETSC_MAX_PATH_LEN, "-%s_patch_mat_view", patch->classname);CHKERRQ(ierr);
   ierr = PetscOptionsGetViewer(comm,((PetscObject) pc)->options, prefix, option, &patch->viewerMatrix, &patch->formatMatrix, &patch->viewMatrix);CHKERRQ(ierr);
+  ierr = PetscSNPrintf(option, PETSC_MAX_PATH_LEN, "-%s_patch_statistics", patch->classname);CHKERRQ(ierr);
+  ierr = PetscOptionsBool(option, "Print out size information during patch construction", "PCPATCH", patch->viewPatchStatistics, &patch->viewPatchStatistics, &flg);CHKERRQ(ierr);
   ierr = PetscOptionsTail();CHKERRQ(ierr);
   patch->optionsSet = PETSC_TRUE;
   PetscFunctionReturn(0);

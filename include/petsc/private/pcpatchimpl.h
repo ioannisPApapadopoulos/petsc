@@ -102,6 +102,7 @@ typedef struct {
   PetscErrorCode     (*updatemultiplicative)(PC, PetscInt, PetscInt);
   /* Monitoring */
   PetscBool            viewPatches;        /* View information about patch construction */
+  PetscBool            viewPatchStatistics;/* View size information about patch */
   PetscBool            viewCells;          /* View cells for each patch */
   PetscViewer          viewerCells;        /*   Viewer for patch cells */
   PetscViewerFormat    formatCells;        /*   Format for patch cells */
