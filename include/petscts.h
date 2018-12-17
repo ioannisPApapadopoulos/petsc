@@ -27,6 +27,7 @@ J*/
 typedef const char* TSType;
 #define TSEULER           "euler"
 #define TSBEULER          "beuler"
+#define TSBASICSYMPLECTIC "basicsymplectic"
 #define TSPSEUDO          "pseudo"
 #define TSCN              "cn"
 #define TSSUNDIALS        "sundials"
@@ -262,7 +263,7 @@ PETSC_EXTERN PetscErrorCode TSComputeDRDYFunction(TS,PetscReal,Vec,Vec*);
 
   Concepts: ODE solvers, trajectory
 
-.seealso:  TSSetSaveTrajectory(), TSTrajectoryCreate(), TSTrajectorySetType(), TSTrajectoryDestroy()
+.seealso:  TSSetSaveTrajectory(), TSTrajectoryCreate(), TSTrajectorySetType(), TSTrajectoryDestroy(), TSTrajectoryReset()
 S*/
 typedef struct _p_TSTrajectory* TSTrajectory;
 
@@ -284,13 +285,19 @@ PETSC_EXTERN PetscClassId      TSTRAJECTORY_CLASSID;
 PETSC_EXTERN PetscBool         TSTrajectoryRegisterAllCalled;
 
 PETSC_EXTERN PetscErrorCode TSSetSaveTrajectory(TS);
+PETSC_EXTERN PetscErrorCode TSResetTrajectory(TS);
 
 PETSC_EXTERN PetscErrorCode TSTrajectoryCreate(MPI_Comm,TSTrajectory*);
+PETSC_EXTERN PetscErrorCode TSTrajectoryReset(TSTrajectory);
 PETSC_EXTERN PetscErrorCode TSTrajectoryDestroy(TSTrajectory*);
 PETSC_EXTERN PetscErrorCode TSTrajectoryView(TSTrajectory,PetscViewer);
 PETSC_EXTERN PetscErrorCode TSTrajectorySetType(TSTrajectory,TS,TSTrajectoryType);
 PETSC_EXTERN PetscErrorCode TSTrajectorySet(TSTrajectory,TS,PetscInt,PetscReal,Vec);
 PETSC_EXTERN PetscErrorCode TSTrajectoryGet(TSTrajectory,TS,PetscInt,PetscReal*);
+PETSC_EXTERN PetscErrorCode TSTrajectoryGetVecs(TSTrajectory,TS,PetscInt,PetscReal*,Vec,Vec);
+PETSC_EXTERN PetscErrorCode TSTrajectoryGetUpdatedHistoryVecs(TSTrajectory,TS,PetscReal,Vec*,Vec*);
+PETSC_EXTERN PetscErrorCode TSTrajectoryGetNumSteps(TSTrajectory,PetscInt*);
+PETSC_EXTERN PetscErrorCode TSTrajectoryRestoreUpdatedHistoryVecs(TSTrajectory,Vec*,Vec*);
 PETSC_EXTERN PetscErrorCode TSTrajectorySetFromOptions(TSTrajectory,TS);
 PETSC_EXTERN PetscErrorCode TSTrajectoryRegister(const char[],PetscErrorCode (*)(TSTrajectory,TS));
 PETSC_EXTERN PetscErrorCode TSTrajectoryRegisterAll(void);
@@ -298,6 +305,8 @@ PETSC_EXTERN PetscErrorCode TSTrajectorySetUp(TSTrajectory,TS);
 PETSC_EXTERN PetscErrorCode TSTrajectorySetMonitor(TSTrajectory,PetscBool);
 PETSC_EXTERN PetscErrorCode TSTrajectorySetVariableNames(TSTrajectory,const char * const*);
 PETSC_EXTERN PetscErrorCode TSTrajectorySetTransform(TSTrajectory,PetscErrorCode (*)(void*,Vec,Vec*),PetscErrorCode (*)(void*),void*);
+PETSC_EXTERN PetscErrorCode TSTrajectorySetSolutionOnly(TSTrajectory,PetscBool);
+PETSC_EXTERN PetscErrorCode TSTrajectoryGetSolutionOnly(TSTrajectory,PetscBool*);
 PETSC_EXTERN PetscErrorCode TSTrajectorySetKeepFiles(TSTrajectory,PetscBool);
 PETSC_EXTERN PetscErrorCode TSTrajectorySetDirname(TSTrajectory,const char[]);
 PETSC_EXTERN PetscErrorCode TSTrajectorySetFiletemplate(TSTrajectory,const char[]);
@@ -350,6 +359,7 @@ PETSC_EXTERN PETSC_DEPRECATED("Use TSGetStepNumber")      PetscErrorCode TSGetTi
 PETSC_EXTERN PETSC_DEPRECATED("Use TSGetStepNumber")      PetscErrorCode TSGetTotalSteps(TS,PetscInt*);
 
 PETSC_EXTERN PetscErrorCode TSMonitorDefault(TS,PetscInt,PetscReal,Vec,PetscViewerAndFormat*);
+PETSC_EXTERN PetscErrorCode TSMonitorExtreme(TS,PetscInt,PetscReal,Vec,PetscViewerAndFormat*);
 
 typedef struct _n_TSMonitorDrawCtx*  TSMonitorDrawCtx;
 PETSC_EXTERN PetscErrorCode TSMonitorDrawCtxCreate(MPI_Comm,const char[],const char[],int,int,int,int,PetscInt,TSMonitorDrawCtx *);
@@ -421,6 +431,12 @@ PETSC_EXTERN PetscErrorCode TSSetI2Function(TS,Vec,TSI2Function,void*);
 PETSC_EXTERN PetscErrorCode TSGetI2Function(TS,Vec*,TSI2Function*,void**);
 PETSC_EXTERN PetscErrorCode TSSetI2Jacobian(TS,Mat,Mat,TSI2Jacobian,void*);
 PETSC_EXTERN PetscErrorCode TSGetI2Jacobian(TS,Mat*,Mat*,TSI2Jacobian*,void**);
+
+PETSC_EXTERN PetscErrorCode TSRHSSplitSetIS(TS,const char[],IS);
+PETSC_EXTERN PetscErrorCode TSRHSSplitGetIS(TS,const char[],IS*);
+PETSC_EXTERN PetscErrorCode TSRHSSplitSetRHSFunction(TS,const char[],Vec,TSRHSFunction,void*);
+PETSC_EXTERN PetscErrorCode TSRHSSplitGetSubTS(TS,const char[],TS*);
+PETSC_EXTERN PetscErrorCode TSRHSSplitGetSubTSs(TS,PetscInt*,TS*[]);
 
 PETSC_EXTERN PetscErrorCode TSComputeRHSFunctionLinear(TS,PetscReal,Vec,Vec,void*);
 PETSC_EXTERN PetscErrorCode TSComputeRHSJacobianConstant(TS,PetscReal,Vec,Mat,Mat,void*);
@@ -615,11 +631,12 @@ typedef struct _p_TSAdapt *TSAdapt;
 .seealso: TSAdaptSetType(), TS
 E*/
 typedef const char *TSAdaptType;
-#define TSADAPTNONE  "none"
-#define TSADAPTBASIC "basic"
-#define TSADAPTDSP   "dsp"
-#define TSADAPTCFL   "cfl"
-#define TSADAPTGLEE  "glee"
+#define TSADAPTNONE    "none"
+#define TSADAPTBASIC   "basic"
+#define TSADAPTDSP     "dsp"
+#define TSADAPTCFL     "cfl"
+#define TSADAPTGLEE    "glee"
+#define TSADAPTHISTORY "history"
 
 PETSC_EXTERN PetscErrorCode TSGetAdapt(TS,TSAdapt*);
 PETSC_EXTERN PetscErrorCode TSAdaptRegister(const char[],PetscErrorCode (*)(TSAdapt));
@@ -648,6 +665,7 @@ PETSC_EXTERN PetscErrorCode TSAdaptGetClip(TSAdapt,PetscReal*,PetscReal*);
 PETSC_EXTERN PetscErrorCode TSAdaptSetStepLimits(TSAdapt,PetscReal,PetscReal);
 PETSC_EXTERN PetscErrorCode TSAdaptGetStepLimits(TSAdapt,PetscReal*,PetscReal*);
 PETSC_EXTERN PetscErrorCode TSAdaptSetCheckStage(TSAdapt,PetscErrorCode(*)(TSAdapt,TS,PetscReal,Vec,PetscBool*));
+PETSC_EXTERN PetscErrorCode TSAdaptHistorySetHistory(TSAdapt,PetscInt n,PetscReal hist[],PetscBool);
 PETSC_EXTERN PetscErrorCode TSAdaptDSPSetFilter(TSAdapt,const char *);
 PETSC_EXTERN PetscErrorCode TSAdaptDSPSetPID(TSAdapt,PetscReal,PetscReal,PetscReal);
 
@@ -838,8 +856,8 @@ typedef const char* TSRosWType;
 #define TSROSWVELDD4      "veldd4"
 #define TSROSW4L          "4l"
 
-PETSC_EXTERN PetscErrorCode TSRosWGetType(TS ts,TSRosWType*);
-PETSC_EXTERN PetscErrorCode TSRosWSetType(TS ts,TSRosWType);
+PETSC_EXTERN PetscErrorCode TSRosWGetType(TS,TSRosWType*);
+PETSC_EXTERN PetscErrorCode TSRosWSetType(TS,TSRosWType);
 PETSC_EXTERN PetscErrorCode TSRosWSetRecomputeJacobian(TS,PetscBool);
 PETSC_EXTERN PetscErrorCode TSRosWRegister(TSRosWType,PetscInt,PetscInt,const PetscReal[],const PetscReal[],const PetscReal[],const PetscReal[],PetscInt,const PetscReal[]);
 PETSC_EXTERN PetscErrorCode TSRosWRegisterRos4(TSRosWType,PetscReal,PetscReal,PetscReal,PetscReal,PetscReal);
@@ -849,6 +867,25 @@ PETSC_EXTERN PetscErrorCode TSRosWRegisterDestroy(void);
 
 PETSC_EXTERN PetscErrorCode TSBDFSetOrder(TS,PetscInt);
 PETSC_EXTERN PetscErrorCode TSBDFGetOrder(TS,PetscInt*);
+
+/*J
+  TSBasicSymplecticType - String with the name of a basic symplectic integration method.
+
+  Level: beginner
+
+  .seealso: TSBasicSymplecticSetType(), TS, TSBASICSYMPLECTIC, TSBasicSymplecticRegister()
+J*/
+typedef const char* TSBasicSymplecticType;
+#define TSBASICSYMPLECTICSIEULER   "1"
+#define TSBASICSYMPLECTICVELVERLET "2"
+#define TSBASICSYMPLECTIC3         "3"
+#define TSBASICSYMPLECTIC4         "4"
+PETSC_EXTERN PetscErrorCode TSBasicSymplecticSetType(TS,TSBasicSymplecticType);
+PETSC_EXTERN PetscErrorCode TSBasicSymplecticGetType(TS,TSBasicSymplecticType*);
+PETSC_EXTERN PetscErrorCode TSBasicSymplecticRegister(TSBasicSymplecticType,PetscInt,PetscInt,PetscReal[],PetscReal[]);
+PETSC_EXTERN PetscErrorCode TSBasicSymplecticInitializePackage(void);
+PETSC_EXTERN PetscErrorCode TSBasicSymplecticFinalizePackage(void);
+PETSC_EXTERN PetscErrorCode TSBasicSymplecticRegisterDestroy(void);
 
 /*
        PETSc interface to Sundials

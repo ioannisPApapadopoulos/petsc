@@ -210,6 +210,7 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ_nonscalable(Mat A,Mat P,PetscRea
   PetscBT            lnkbt;
   PetscScalar        *apa;
   PetscReal          afill;
+  MatType            mtype;
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)A,&comm);CHKERRQ(ierr);
@@ -303,17 +304,14 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ_nonscalable(Mat A,Mat P,PetscRea
   ierr = MatSetSizes(Cmpi,am,pn,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = MatSetBlockSizesFromMats(Cmpi,A,P);CHKERRQ(ierr);
 
-  ierr = MatSetType(Cmpi,MATMPIAIJ);CHKERRQ(ierr);
+  ierr = MatGetType(A,&mtype);CHKERRQ(ierr);
+  ierr = MatSetType(Cmpi,mtype);CHKERRQ(ierr);
   ierr = MatMPIAIJSetPreallocation(Cmpi,0,dnz,0,onz);CHKERRQ(ierr);
-  ierr = MatPreallocateFinalize(dnz,onz);CHKERRQ(ierr);
-  for (i=0; i<am; i++) {
-    row  = i + rstart;
-    apnz = api[i+1] - api[i];
-    ierr = MatSetValues(Cmpi,1,&row,apnz,apj,apa,INSERT_VALUES);CHKERRQ(ierr);
-    apj += apnz;
-  }
+
+  ierr = MatSetValues_MPIAIJ_CopyFromCSRFormat_Symbolic(Cmpi, apj, api);CHKERRQ(ierr);
   ierr = MatAssemblyBegin(Cmpi,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatAssemblyEnd(Cmpi,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+  ierr = MatPreallocateFinalize(dnz,onz);CHKERRQ(ierr);
 
   ptap->destroy        = Cmpi->ops->destroy;
   ptap->duplicate      = Cmpi->ops->duplicate;
@@ -379,11 +377,16 @@ PetscErrorCode MatMPIAIJ_MPIDenseDestroy(void *ctx)
   PetscFunctionReturn(0);
 }
 
+#include <petsc/private/vecscatterimpl.h>
 /*
     This is a "dummy function" that handles the case where matrix C was created as a dense matrix
   directly by the user and passed to MatMatMult() with the MAT_REUSE_MATRIX option
 
   It is the same as MatMatMultSymbolic_MPIAIJ_MPIDense() except does not create C
+
+  Developer Notes: This directly accesses information inside the VecScatter associated with the matrix-vector product
+   for this matrix. This is not desirable..
+
 */
 PetscErrorCode MatMatMultNumeric_MPIDense(Mat A,Mat B,Mat C)
 {
@@ -704,11 +707,11 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ(Mat A,Mat P,PetscReal fill,Mat *
   Mat_SeqAIJ         *ad        = (Mat_SeqAIJ*)(a->A)->data,*ao=(Mat_SeqAIJ*)(a->B)->data,*p_loc,*p_oth;
   PetscInt           *pi_loc,*pj_loc,*pi_oth,*pj_oth,*dnz,*onz;
   PetscInt           *adi=ad->i,*adj=ad->j,*aoi=ao->i,*aoj=ao->j,rstart=A->rmap->rstart;
-  PetscInt           i,pnz,row,*api,*apj,*Jptr,apnz,nspacedouble=0,j,nzi,*lnk,apnz_max;
-  PetscInt           am=A->rmap->n,pN=P->cmap->N,pn=P->cmap->n,pm=P->rmap->n;
+  PetscInt           i,pnz,row,*api,*apj,*Jptr,apnz,nspacedouble=0,j,nzi,*lnk,apnz_max=0;
+  PetscInt           am=A->rmap->n,pn=P->cmap->n,pm=P->rmap->n,lsize=pn+20;
   PetscReal          afill;
   PetscScalar        *apa;
-  PetscTable         ta;
+  MatType            mtype;
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)A,&comm);CHKERRQ(ierr);
@@ -739,30 +742,7 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ(Mat A,Mat P,PetscReal fill,Mat *
   ptap->api = api;
   api[0]    = 0;
 
-  /* create and initialize a linked list */
-  ierr = PetscTableCreate(pn,pN,&ta);CHKERRQ(ierr);
-
-  /* Calculate apnz_max */
-  apnz_max = 0;
-  for (i=0; i<am; i++) {
-    ierr = PetscTableRemoveAll(ta);CHKERRQ(ierr);
-    /* diagonal portion of A */
-    nzi  = adi[i+1] - adi[i];
-    Jptr = adj+adi[i];  /* cols of A_diag */
-    MatMergeRows_SeqAIJ(p_loc,nzi,Jptr,ta);
-    ierr = PetscTableGetCount(ta,&apnz);CHKERRQ(ierr);
-    if (apnz_max < apnz) apnz_max = apnz;
-
-    /*  off-diagonal portion of A */
-    nzi = aoi[i+1] - aoi[i];
-    Jptr = aoj+aoi[i];  /* cols of A_off */
-    MatMergeRows_SeqAIJ(p_oth,nzi,Jptr,ta);
-    ierr = PetscTableGetCount(ta,&apnz);CHKERRQ(ierr);
-    if (apnz_max < apnz) apnz_max = apnz;
-  }
-  ierr = PetscTableDestroy(&ta);CHKERRQ(ierr);
-
-  ierr = PetscLLCondensedCreate_Scalable(apnz_max,&lnk);CHKERRQ(ierr);
+  ierr = PetscLLCondensedCreate_Scalable(lsize,&lnk);CHKERRQ(ierr);
 
   /* Initial FreeSpace size is fill*(nnz(A)+nnz(P)) */
   ierr = PetscFreeSpaceGet(PetscRealIntMultTruncate(fill,PetscIntSumTruncate(adi[am],PetscIntSumTruncate(aoi[am],pi_loc[pm]))),&free_space);CHKERRQ(ierr);
@@ -775,8 +755,16 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ(Mat A,Mat P,PetscReal fill,Mat *
       row  = *adj++;
       pnz  = pi_loc[row+1] - pi_loc[row];
       Jptr = pj_loc + pi_loc[row];
+      /* Expand list if it is not long enough */
+      if (pnz+apnz_max > lsize) {
+        lsize = pnz+apnz_max;
+        ierr = PetscLLCondensedExpand_Scalable(lsize, &lnk);CHKERRQ(ierr);
+      }
       /* add non-zero cols of P into the sorted linked list lnk */
       ierr = PetscLLCondensedAddSorted_Scalable(pnz,Jptr,lnk);CHKERRQ(ierr);
+      apnz     = *lnk; /* The first element in the list is the number of items in the list */
+      api[i+1] = api[i] + apnz;
+      if (apnz > apnz_max) apnz_max = apnz;
     }
     /* off-diagonal portion of A */
     nzi = aoi[i+1] - aoi[i];
@@ -784,11 +772,20 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ(Mat A,Mat P,PetscReal fill,Mat *
       row  = *aoj++;
       pnz  = pi_oth[row+1] - pi_oth[row];
       Jptr = pj_oth + pi_oth[row];
+      /* Expand list if it is not long enough */
+      if (pnz+apnz_max > lsize) {
+        lsize = pnz + apnz_max;
+        ierr = PetscLLCondensedExpand_Scalable(lsize, &lnk);CHKERRQ(ierr);
+      }
+      /* add non-zero cols of P into the sorted linked list lnk */
       ierr = PetscLLCondensedAddSorted_Scalable(pnz,Jptr,lnk);CHKERRQ(ierr);
+      apnz     = *lnk;  /* The first element in the list is the number of items in the list */
+      api[i+1] = api[i] + apnz;
+      if (apnz > apnz_max) apnz_max = apnz;
     }
-
     apnz     = *lnk;
     api[i+1] = api[i] + apnz;
+    if (apnz > apnz_max) apnz_max = apnz;
 
     /* if free space is not available, double the total space in the list */
     if (current_space->local_remaining<apnz) {
@@ -817,22 +814,18 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ(Mat A,Mat P,PetscReal fill,Mat *
   ierr = MatCreate(comm,&Cmpi);CHKERRQ(ierr);
   ierr = MatSetSizes(Cmpi,am,pn,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = MatSetBlockSizesFromMats(Cmpi,A,P);CHKERRQ(ierr);
-  ierr = MatSetType(Cmpi,MATMPIAIJ);CHKERRQ(ierr);
+  ierr = MatGetType(A,&mtype);CHKERRQ(ierr);
+  ierr = MatSetType(Cmpi,mtype);CHKERRQ(ierr);
   ierr = MatMPIAIJSetPreallocation(Cmpi,0,dnz,0,onz);CHKERRQ(ierr);
-  ierr = MatPreallocateFinalize(dnz,onz);CHKERRQ(ierr);
 
   /* malloc apa for assembly Cmpi */
   ierr = PetscCalloc1(apnz_max,&apa);CHKERRQ(ierr);
-
   ptap->apa = apa;
-  for (i=0; i<am; i++) {
-    row  = i + rstart;
-    apnz = api[i+1] - api[i];
-    ierr = MatSetValues(Cmpi,1,&row,apnz,apj,apa,INSERT_VALUES);CHKERRQ(ierr);
-    apj += apnz;
-  }
+
+  ierr = MatSetValues_MPIAIJ_CopyFromCSRFormat_Symbolic(Cmpi, apj, api);CHKERRQ(ierr);
   ierr = MatAssemblyBegin(Cmpi,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatAssemblyEnd(Cmpi,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+  ierr = MatPreallocateFinalize(dnz,onz);CHKERRQ(ierr);
 
   ptap->destroy             = Cmpi->ops->destroy;
   ptap->duplicate           = Cmpi->ops->duplicate;
@@ -843,7 +836,6 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ(Mat A,Mat P,PetscReal fill,Mat *
   /* attach the supporting struct to Cmpi for reuse */
   c       = (Mat_MPIAIJ*)Cmpi->data;
   c->ptap = ptap;
-
   *C = Cmpi;
 
   /* set MatInfo */
@@ -980,6 +972,7 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ_seqMPI(Mat A, Mat P, PetscReal f
   PetscReal          afill;
   PetscMPIInt        rank;
   Mat                adpd, aopoth;
+  MatType            mtype;
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)A,&comm);CHKERRQ(ierr);
@@ -1110,18 +1103,16 @@ PetscErrorCode MatMatMultSymbolic_MPIAIJ_MPIAIJ_seqMPI(Mat A, Mat P, PetscReal f
   ierr = MatCreate(comm,&Cmpi);CHKERRQ(ierr);
   ierr = MatSetSizes(Cmpi,am,pn,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = MatSetBlockSizesFromMats(Cmpi,A,P);CHKERRQ(ierr);
-
-  ierr = MatSetType(Cmpi,MATMPIAIJ);CHKERRQ(ierr);
+  ierr = MatGetType(A,&mtype);CHKERRQ(ierr);
+  ierr = MatSetType(Cmpi,mtype);CHKERRQ(ierr);
   ierr = MatMPIAIJSetPreallocation(Cmpi,0,dnz,0,onz);CHKERRQ(ierr);
-  ierr = MatPreallocateFinalize(dnz,onz);CHKERRQ(ierr);
-  for (i=0; i<am; i++) {
-    row  = i + rstart;
-    apnz = api[i+1] - api[i];
-    ierr = MatSetValues(Cmpi, 1, &row, apnz, apj, apa, INSERT_VALUES);CHKERRQ(ierr);
-    apj += apnz;
-  }
+
+
+  ierr = MatSetValues_MPIAIJ_CopyFromCSRFormat_Symbolic(Cmpi, apj, api);CHKERRQ(ierr);
   ierr = MatAssemblyBegin(Cmpi,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
   ierr = MatAssemblyEnd(Cmpi,MAT_FINAL_ASSEMBLY);CHKERRQ(ierr);
+  ierr = MatPreallocateFinalize(dnz,onz);CHKERRQ(ierr);
+
 
   ptap->destroy        = Cmpi->ops->destroy;
   ptap->duplicate      = Cmpi->ops->duplicate;
@@ -1266,6 +1257,7 @@ PetscErrorCode MatTransposeMatMultSymbolic_MPIAIJ_MPIAIJ_nonscalable(Mat P,Mat A
   PetscInt            *Jptr,*prmap=p->garray,con,j,Crmax;
   Mat_SeqAIJ          *a_loc,*c_loc,*c_oth;
   PetscTable          ta;
+  MatType             mtype;
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)A,&comm);CHKERRQ(ierr);
@@ -1274,7 +1266,8 @@ PetscErrorCode MatTransposeMatMultSymbolic_MPIAIJ_MPIAIJ_nonscalable(Mat P,Mat A
 
   /* create symbolic parallel matrix Cmpi */
   ierr = MatCreate(comm,&Cmpi);CHKERRQ(ierr);
-  ierr = MatSetType(Cmpi,MATMPIAIJ);CHKERRQ(ierr);
+  ierr = MatGetType(A,&mtype);CHKERRQ(ierr);
+  ierr = MatSetType(Cmpi,mtype);CHKERRQ(ierr);
 
   Cmpi->ops->mattransposemultnumeric = MatTransposeMatMultNumeric_MPIAIJ_MPIAIJ_nonscalable;
 
@@ -1417,7 +1410,7 @@ PetscErrorCode MatTransposeMatMultSymbolic_MPIAIJ_MPIAIJ_nonscalable(Mat P,Mat A
   /* (5) compute the local portion of Cmpi      */
   /* ------------------------------------------ */
   /* set initial free space to be Crmax, sufficient for holding nozeros in each row of Cmpi */
-  ierr          = PetscFreeSpaceGet(Crmax,&free_space);CHKERRQ(ierr); 
+  ierr          = PetscFreeSpaceGet(Crmax,&free_space);CHKERRQ(ierr);
   current_space = free_space;
 
   ierr = PetscMalloc3(nrecv,&buf_ri_k,nrecv,&nextrow,nrecv,&nextci);CHKERRQ(ierr);
@@ -1429,7 +1422,7 @@ PetscErrorCode MatTransposeMatMultSymbolic_MPIAIJ_MPIAIJ_nonscalable(Mat P,Mat A
   }
 
   ierr = MatPreallocateInitialize(comm,pn,an,dnz,onz);CHKERRQ(ierr);
-  ierr = PetscLLCondensedCreate(Crmax,aN,&lnk,&lnkbt);CHKERRQ(ierr); 
+  ierr = PetscLLCondensedCreate(Crmax,aN,&lnk,&lnkbt);CHKERRQ(ierr);
   for (i=0; i<pn; i++) {
     /* add C_loc into Cmpi */
     nzi  = c_loc->i[i+1] - c_loc->i[i];
@@ -1737,6 +1730,7 @@ PetscErrorCode MatTransposeMatMultSymbolic_MPIAIJ_MPIAIJ(Mat P,Mat A,PetscReal f
   PetscScalar         *vals;
   Mat_SeqAIJ          *a_loc,*pdt,*pot;
   PetscTable          ta;
+  MatType             mtype;
 
   PetscFunctionBegin;
   ierr = PetscObjectGetComm((PetscObject)A,&comm);CHKERRQ(ierr);
@@ -1998,7 +1992,7 @@ PetscErrorCode MatTransposeMatMultSymbolic_MPIAIJ_MPIAIJ(Mat P,Mat A,PetscReal f
     bi[i+1] = bi[i] + nnz;
     if (nnz > rmax) rmax = nnz;
   }
-  ierr = PetscFree3(buf_ri_k,nextrow,nextci);CHKERRQ(ierr); 
+  ierr = PetscFree3(buf_ri_k,nextrow,nextci);CHKERRQ(ierr);
 
   ierr      = PetscMalloc1(bi[pn]+1,&bj);CHKERRQ(ierr);
   ierr      = PetscFreeSpaceContiguous(&free_space,bj);CHKERRQ(ierr);
@@ -2017,7 +2011,8 @@ PetscErrorCode MatTransposeMatMultSymbolic_MPIAIJ_MPIAIJ(Mat P,Mat A,PetscReal f
   ierr = MatCreate(comm,&Cmpi);CHKERRQ(ierr);
   ierr = MatSetSizes(Cmpi,pn,A->cmap->n,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = MatSetBlockSizes(Cmpi,PetscAbs(P->cmap->bs),PetscAbs(A->cmap->bs));CHKERRQ(ierr);
-  ierr = MatSetType(Cmpi,MATMPIAIJ);CHKERRQ(ierr);
+  ierr = MatGetType(A,&mtype);CHKERRQ(ierr);
+  ierr = MatSetType(Cmpi,mtype);CHKERRQ(ierr);
   ierr = MatMPIAIJSetPreallocation(Cmpi,0,dnz,0,onz);CHKERRQ(ierr);
   ierr = MatPreallocateFinalize(dnz,onz);CHKERRQ(ierr);
   ierr = MatSetBlockSize(Cmpi,1);CHKERRQ(ierr);

@@ -2216,16 +2216,16 @@ PetscErrorCode DMSetFromOptions_NonRefinement_Plex(PetscOptionItems *PetscOption
 
   PetscFunctionBegin;
   /* Handle viewing */
-  ierr = PetscOptionsBool("-dm_plex_print_set_values", "Output all set values info", "DMView", PETSC_FALSE, &mesh->printSetValues, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsInt("-dm_plex_print_fem", "Debug output level all fem computations", "DMView", 0, &mesh->printFEM, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsReal("-dm_plex_print_tol", "Tolerance for FEM output", "DMView", mesh->printTol, &mesh->printTol, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsInt("-dm_plex_print_l2", "Debug output level all L2 diff computations", "DMView", 0, &mesh->printL2, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsBool("-dm_plex_print_set_values", "Output all set values info", "DMPlexMatSetClosure", PETSC_FALSE, &mesh->printSetValues, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-dm_plex_print_fem", "Debug output level all fem computations", "DMPlexSNESComputeResidualFEM", 0, &mesh->printFEM, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsReal("-dm_plex_print_tol", "Tolerance for FEM output", "DMPlexSNESComputeResidualFEM", mesh->printTol, &mesh->printTol, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsInt("-dm_plex_print_l2", "Debug output level all L2 diff computations", "DMComputeL2Diff", 0, &mesh->printL2, NULL);CHKERRQ(ierr);
   /* Point Location */
-  ierr = PetscOptionsBool("-dm_plex_hash_location", "Use grid hashing for point location", "DMView", PETSC_FALSE, &mesh->useHashLocation, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsBool("-dm_plex_hash_location", "Use grid hashing for point location", "DMInterpolate", PETSC_FALSE, &mesh->useHashLocation, NULL);CHKERRQ(ierr);
   /* Partitioning and distribution */
   ierr = PetscOptionsBool("-dm_plex_partition_balance", "Attempt to evenly divide points on partition boundary between processes", "DMPlexSetPartitionBalance", PETSC_FALSE, &mesh->partitionBalance, NULL);CHKERRQ(ierr);
   /* Generation and remeshing */
-  ierr = PetscOptionsBool("-dm_plex_remesh_bd", "Allow changes to the boundary on remeshing", "DMView", PETSC_FALSE, &mesh->remeshBd, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsBool("-dm_plex_remesh_bd", "Allow changes to the boundary on remeshing", "DMAdapt", PETSC_FALSE, &mesh->remeshBd, NULL);CHKERRQ(ierr);
   /* Projection behavior */
   ierr = PetscOptionsInt("-dm_plex_max_projection_height", "Maxmimum mesh point height used to project locally", "DMPlexSetMaxProjectionHeight", 0, &mesh->maxProjectionHeight, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-dm_plex_regular_refinement", "Use special nested projection algorithm for regular refinement", "DMPlexSetRegularRefinement", mesh->regularRefinement, &mesh->regularRefinement, NULL);CHKERRQ(ierr);
@@ -2451,6 +2451,12 @@ PETSC_INTERN PetscErrorCode DMClone_Plex(DM dm, DM *newdm)
                     In the local representation, Vecs contain all unknowns in the interior and shared boundary. This is
                     specified by a PetscSection object. Ownership in the global representation is determined by
                     ownership of the underlying DMPlex points. This is specified by another PetscSection object.
+
+  Options Database Keys:
++ -dm_view :mesh.tex:ascii_latex - View the mesh in LaTeX/TikZ
+. -dm_plex_view_scale <num>      - Scale the TikZ
+- -dm_plex_print_fem <num>       - View FEM assembly information, such as element vectors and matrices
+
 
   Level: intermediate
 
@@ -2923,11 +2929,11 @@ PetscErrorCode DMPlexCreateFromCellList(MPI_Comm comm, PetscInt dim, PetscInt nu
   Input Parameters:
 + dm - The empty DM object, usually from DMCreate() and DMSetDimension()
 . depth - The depth of the DAG
-. numPoints - The number of points at each depth
+. numPoints - Array of size depth + 1 containing the number of points at each depth
 . coneSize - The cone size of each point
 . cones - The concatenation of the cone points for each point, the cone list must be oriented correctly for each point
 . coneOrientations - The orientation of each cone point
-- vertexCoords - An array of numVertices*dim numbers, the coordinates of each vertex
+- vertexCoords - An array of numPoints[0]*spacedim numbers representing the coordinates of each vertex, with spacedim the value set via DMSetCoordinateDim()
 
   Output Parameter:
 . dm - The DM

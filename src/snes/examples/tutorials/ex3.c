@@ -16,8 +16,8 @@ T*/
 
 
 /*
-   Include "petscdraw.h" so that we can use distributed arrays (DMDAs).
-   Include "petscdraw.h" so that we can use PETSc drawing routines.
+   Include "petscdm.h" so that we can use data management objects (DMs)
+   Include "petscdmda.h" so that we can use distributed arrays (DMDAs).
    Include "petscsnes.h" so that we can use SNES solvers.  Note that this
    file automatically includes:
      petscsys.h    - base PETSc routines
@@ -697,5 +697,11 @@ PetscErrorCode MatrixFreePreconditioner(PC pc,Vec x,Vec y)
    test:
       suffix: 4
       args: -nox -pre_check_iterates -post_check_iterates
+
+   test:
+      suffix: 5
+      requires: double !complex !single
+      nsize: 2
+      args: -nox -snes_test_jacobian  -snes_test_jacobian_view
 
 TEST*/

@@ -33,7 +33,7 @@ $        VecDestroy(&vout);
     Do NOT create a vector and then pass it in as the final argument vout! vout is created by this routine
   automatically (unless you pass NULL in for that argument if you do not need it).
 
-.seealso VecScatterCreate(), VecScatterCreateToZero(), VecScatterBegin(), VecScatterEnd()
+.seealso VecScatterCreateWithData(), VecScatterCreateToZero(), VecScatterBegin(), VecScatterEnd()
 
 @*/
 PetscErrorCode  VecScatterCreateToAll(Vec vin,VecScatter *ctx,Vec *vout)
@@ -63,7 +63,7 @@ PetscErrorCode  VecScatterCreateToAll(Vec vin,VecScatter *ctx,Vec *vout)
   ierr = VecCreateSeq(PETSC_COMM_SELF,N,tmpv);CHKERRQ(ierr);
   /* Create the VecScatter ctx with the communication info */
   ierr = ISCreateStride(PETSC_COMM_SELF,N,0,1,&is);CHKERRQ(ierr);
-  ierr = VecScatterCreate(vin,is,*tmpv,is,ctx);CHKERRQ(ierr);
+  ierr = VecScatterCreateWithData(vin,is,*tmpv,is,ctx);CHKERRQ(ierr);
   ierr = ISDestroy(&is);CHKERRQ(ierr);
   if (tmpvout) {ierr = VecDestroy(tmpv);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
@@ -100,7 +100,7 @@ $        // destroy scatter context and local vector when no longer needed
 $        VecScatterDestroy(&ctx);
 $        VecDestroy(&vout);
 
-.seealso VecScatterCreate(), VecScatterCreateToAll(), VecScatterBegin(), VecScatterEnd()
+.seealso VecScatterCreateWithData(), VecScatterCreateToAll(), VecScatterBegin(), VecScatterEnd()
 
     Do NOT create a vector and then pass it in as the final argument vout! vout is created by this routine
   automatically (unless you pass NULL in for that argument if you do not need it).
@@ -136,9 +136,50 @@ PetscErrorCode  VecScatterCreateToZero(Vec vin,VecScatter *ctx,Vec *vout)
   ierr = VecCreateSeq(PETSC_COMM_SELF,N,tmpv);CHKERRQ(ierr);
   /* Create the VecScatter ctx with the communication info */
   ierr = ISCreateStride(PETSC_COMM_SELF,N,0,1,&is);CHKERRQ(ierr);
-  ierr = VecScatterCreate(vin,is,*tmpv,is,ctx);CHKERRQ(ierr);
+  ierr = VecScatterCreateWithData(vin,is,*tmpv,is,ctx);CHKERRQ(ierr);
   ierr = ISDestroy(&is);CHKERRQ(ierr);
   if (tmpvout) {ierr = VecDestroy(tmpv);CHKERRQ(ierr);}
   PetscFunctionReturn(0);
 }
 
+#include <petscsf.h>
+
+/*@
+  PetscSFCreateFromZero - Create a PetscSF that maps a Vec from sequential to distributed
+
+  Input Parameters:
+. gv - A distributed Vec
+
+  Output Parameters:
+. sf - The SF created mapping a sequential Vec to gv
+
+  Level: developer
+
+.seealso: DMPlexDistributedToSequential()
+@*/
+PetscErrorCode PetscSFCreateFromZero(MPI_Comm comm, Vec gv, PetscSF *sf)
+{
+  PetscSFNode   *remotenodes;
+  PetscInt      *localnodes;
+  PetscInt       N, n, start, numroots, l;
+  PetscMPIInt    rank;
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  ierr = PetscSFCreate(comm, sf);CHKERRQ(ierr);
+  ierr = VecGetSize(gv, &N);CHKERRQ(ierr);
+  ierr = VecGetLocalSize(gv, &n);CHKERRQ(ierr);
+  ierr = VecGetOwnershipRange(gv, &start, NULL);CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  ierr = PetscMalloc1(n, &localnodes);CHKERRQ(ierr);
+  ierr = PetscMalloc1(n, &remotenodes);CHKERRQ(ierr);
+  if (!rank) numroots = N;
+  else       numroots = 0;
+  for (l = 0; l < n; ++l) {
+    localnodes[l]        = l;
+    remotenodes[l].rank  = 0;
+    remotenodes[l].index = l+start;
+  }
+  ierr = PetscSFSetGraph(*sf, numroots, n, localnodes, PETSC_OWN_POINTER, remotenodes, PETSC_OWN_POINTER);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}

@@ -3,8 +3,8 @@ import config.package
 class Configure(config.package.GNUPackage):
   def __init__(self, framework):
     config.package.GNUPackage.__init__(self, framework)
-    self.gitcommit         = 'v2.0'
-    self.download          = ['git://https://github.com/cburstedde/p4est','https://github.com/p4est/p4est.github.io/raw/master/release/p4est-2.0.tar.gz']
+    self.gitcommit         = 'bfdbf4b3771a6407e8261eb09066a26184a2cdbc'
+    self.download          = ['git://https://github.com/tisaac/p4est','https://github.com/p4est/p4est.github.io/raw/master/release/p4est-2.0.tar.gz']
     self.functions         = ['p4est_init']
     self.includes          = ['p4est_bits.h']
     self.liblist           = [['libp4est.a', 'libsc.a']]
@@ -21,8 +21,10 @@ class Configure(config.package.GNUPackage):
   def setupDependencies(self, framework):
     config.package.GNUPackage.setupDependencies(self, framework)
     self.mpi        = framework.require('config.packages.MPI',self)
-    self.blasLapack = self.framework.require('config.packages.BlasLapack',self)
-    self.deps = [self.mpi,self.blasLapack]
+    self.blasLapack = framework.require('config.packages.BlasLapack',self)
+    self.zlib       = framework.require('config.packages.zlib',self)
+    self.memalign   = framework.argDB['with-memalign']
+    self.deps       = [self.mpi,self.blasLapack,self.zlib]
     return
 
   def formGNUConfigureArgs(self):
@@ -30,7 +32,9 @@ class Configure(config.package.GNUPackage):
     if self.argDB['with-p4est-debugging']:
       args.append('--enable-debug')
     args.append('--enable-mpi')
-    args.append('LIBS="'+self.libraries.toString(self.blasLapack.dlib)+'"')
+    args.append('CPPFLAGS="'+self.headers.toStringNoDupes(self.dinclude)+'"')
+    args.append('LIBS="'+self.libraries.toString(self.dlib)+'"')
+    args.append('--enable-memalign='+self.memalign)
     return args
 
   def updateGitDir(self):
@@ -57,7 +61,11 @@ class Configure(config.package.GNUPackage):
     '''bootstrap, then standar GNU configure; make; make install'''
     import os
     if not os.path.isfile(os.path.join(self.packageDir,'configure')):
-      self.logPrintBox('Trying to bootstrap p4est using autotools; this make take several minutes')
+      if not self.programs.libtoolize:
+        raise RuntimeError('Could not bootstrap p4est using autotools: libtoolize not found')
+      if not self.programs.autoreconf:
+        raise RuntimeError('Could not bootstrap p4est using autotools: autoreconf not found')
+      self.logPrintBox('Trying to bootstrap p4est using autotools; this may take several minutes')
       try:
         self.executeShellCommand('./bootstrap',cwd=self.packageDir,log=self.log)
       except RuntimeError as e:

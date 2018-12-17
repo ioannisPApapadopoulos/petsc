@@ -183,7 +183,7 @@ struct _MatOps {
   PetscErrorCode (*findnonzerorows)(Mat,IS*);
   PetscErrorCode (*getcolumnnorms)(Mat,NormType,PetscReal*);
   PetscErrorCode (*invertblockdiagonal)(Mat,const PetscScalar**);
-  PetscErrorCode (*placeholder_127)(Mat,Vec,Vec,Vec);
+  PetscErrorCode (*invertvariableblockdiagonal)(Mat,PetscInt,const PetscInt*,PetscScalar*);
   PetscErrorCode (*createsubmatricesmpi)(Mat,PetscInt,const IS[], const IS[], MatReuse, Mat**);
   /*129*/
   PetscErrorCode (*setvaluesbatch)(Mat,PetscInt,PetscInt,PetscInt*,const PetscScalar*);
@@ -217,13 +217,13 @@ struct _MatOps {
 PETSC_EXTERN PetscErrorCode MatRegisterOp(MPI_Comm, const char[], PetscVoidFunction, const char[], PetscInt, ...);
 PETSC_EXTERN PetscErrorCode MatQueryOp(MPI_Comm, PetscVoidFunction*, const char[], PetscInt, ...);
 
-typedef struct _p_MatBaseName* MatBaseName;
-struct _p_MatBaseName {
-  char        *bname,*sname,*mname;
-  MatBaseName next;
+typedef struct _p_MatRootName* MatRootName;
+struct _p_MatRootName {
+  char        *rname,*sname,*mname;
+  MatRootName next;
 };
 
-PETSC_EXTERN MatBaseName MatBaseNameList;
+PETSC_EXTERN MatRootName MatRootNameList;
 
 /*
    Utility private matrix routines
@@ -396,7 +396,7 @@ struct _p_Mat {
   PetscBool              subsetoffprocentries;
   PetscBool              submat_singleis; /* for efficient PCSetUP_ASM() */
   PetscBool              structure_only;
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   PetscOffloadFlag       valid_GPU_matrix; /* flag pointing to the matrix on the gpu*/
 #endif
   void                   *spptr;          /* pointer for special library like SuperLU */
@@ -410,6 +410,8 @@ struct _p_Mat {
   MatFactorError         factorerrortype;               /* type of error in factorization */
   PetscReal              factorerror_zeropivot_value;   /* If numerical zero pivot was detected this is the computed value */
   PetscInt               factorerror_zeropivot_row;     /* Row where zero pivot was detected */
+  PetscInt               nblocks,*bsizes;   /* support for MatSetVariableBlockSizes() */
+  char                   *defaultvectype;
 };
 
 PETSC_INTERN PetscErrorCode MatAXPY_Basic(Mat,PetscScalar,Mat,MatStructure);
@@ -1423,6 +1425,17 @@ PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedCreate_Scalable(PetscInt nlnk
   llnk[0] = 0;               /* number of entries on the list */
   llnk[2] = PETSC_MAX_INT;   /* value in the head node */
   llnk[3] = 2;               /* next for the head node */
+  PetscFunctionReturn(0);
+}
+
+PETSC_STATIC_INLINE PetscErrorCode PetscLLCondensedExpand_Scalable(PetscInt nlnk_max,PetscInt **lnk)
+{
+  PetscErrorCode ierr;
+  PetscInt       lsize = 0;
+
+  PetscFunctionBegin;
+  ierr = PetscIntMultError(2,nlnk_max+2,&lsize);CHKERRQ(ierr);
+  ierr = PetscRealloc(lsize*sizeof(PetscInt),lnk);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 

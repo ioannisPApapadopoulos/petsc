@@ -76,6 +76,8 @@ PetscErrorCode MatSetRandom(Mat x,PetscRandom rctx)
   if (rctx) PetscValidHeaderSpecific(rctx,PETSC_RANDOM_CLASSID,2);
   PetscValidType(x,1);
 
+  if (!x->ops->setrandom) SETERRQ1(PetscObjectComm((PetscObject)x),PETSC_ERR_SUP,"Mat type %s",((PetscObject)x)->type_name);
+
   if (!rctx) {
     MPI_Comm comm;
     ierr = PetscObjectGetComm((PetscObject)x,&comm);CHKERRQ(ierr);
@@ -385,7 +387,7 @@ PetscErrorCode MatRealPart(Mat mat)
   if (!mat->ops->realpart) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Mat type %s",((PetscObject)mat)->type_name);
   MatCheckPreallocated(mat,1);
   ierr = (*mat->ops->realpart)(mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -455,7 +457,7 @@ PetscErrorCode MatImaginaryPart(Mat mat)
   if (!mat->ops->imaginarypart) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Mat type %s",((PetscObject)mat)->type_name);
   MatCheckPreallocated(mat,1);
   ierr = (*mat->ops->imaginarypart)(mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -529,7 +531,7 @@ PetscErrorCode MatMissingDiagonal(Mat mat,PetscBool *missing,PetscInt *dd)
    matrix at a time, per processor. MatGetRow() can only obtain rows
    associated with the given processor, it cannot get rows from the
    other processors; for that we suggest using MatCreateSubMatrices(), then
-   MatGetRow() on the submatrix. The row index passed to MatGetRows()
+   MatGetRow() on the submatrix. The row index passed to MatGetRow()
    is in the global number of rows.
 
    Fortran Notes:
@@ -596,7 +598,7 @@ PetscErrorCode MatConjugate(Mat mat)
   if (!mat->assembled) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_WRONGSTATE,"Not for unassembled matrix");
   if (!mat->ops->conjugate) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Not provided for this matrix format, send email to petsc-maint@mcs.anl.gov");
   ierr = (*mat->ops->conjugate)(mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -1241,6 +1243,8 @@ PetscErrorCode MatDestroy(Mat *A)
     ierr = (*(*A)->ops->destroy)(*A);CHKERRQ(ierr);
   }
 
+  ierr = PetscFree((*A)->defaultvectype);CHKERRQ(ierr);
+  ierr = PetscFree((*A)->bsizes);CHKERRQ(ierr);
   ierr = PetscFree((*A)->solvertype);CHKERRQ(ierr);
   ierr = MatDestroy_Redundant(&(*A)->redundant);CHKERRQ(ierr);
   ierr = MatNullSpaceDestroy(&(*A)->nullsp);CHKERRQ(ierr);
@@ -1344,7 +1348,7 @@ PetscErrorCode MatSetValues(Mat mat,PetscInt m,const PetscInt idxm[],PetscInt n,
   ierr = PetscLogEventBegin(MAT_SetValues,mat,0,0,0);CHKERRQ(ierr);
   ierr = (*mat->ops->setvalues)(mat,m,idxm,n,idxn,v,addv);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_SetValues,mat,0,0,0);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -1391,7 +1395,7 @@ PetscErrorCode MatSetValuesRowLocal(Mat mat,PetscInt row,const PetscScalar v[])
   PetscValidScalarPointer(v,2);
   ierr = ISLocalToGlobalMappingApply(mat->rmap->mapping,1,&row,&globalrow);CHKERRQ(ierr);
   ierr = MatSetValuesRow(mat,globalrow,v);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -1449,7 +1453,7 @@ PetscErrorCode MatSetValuesRow(Mat mat,PetscInt row,const PetscScalar v[])
   if (!mat->ops->setvaluesrow) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"Mat type %s",((PetscObject)mat)->type_name);
   ierr = (*mat->ops->setvaluesrow)(mat,row,v);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_SetValues,mat,0,0,0);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -1682,7 +1686,7 @@ PetscErrorCode MatSetValuesBlockedStencil(Mat mat,PetscInt m,const MatStencil id
   }
   ierr = MatSetValuesBlockedLocal(mat,m,jdxm,n,jdxn,v,addv);CHKERRQ(ierr);
   ierr = PetscFree2(bufm,bufn);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -1858,7 +1862,7 @@ PetscErrorCode MatSetValuesBlocked(Mat mat,PetscInt m,const PetscInt idxm[],Pets
     ierr = PetscFree2(bufr,bufc);CHKERRQ(ierr);
   }
   ierr = PetscLogEventEnd(MAT_SetValues,mat,0,0,0);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -2149,7 +2153,7 @@ PetscErrorCode MatSetValuesLocal(Mat mat,PetscInt nrow,const PetscInt irow[],Pet
     ierr = PetscFree2(bufr,bufc);CHKERRQ(ierr);
   }
   ierr = PetscLogEventEnd(MAT_SetValues,mat,0,0,0);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -2239,7 +2243,7 @@ PetscErrorCode MatSetValuesBlockedLocal(Mat mat,PetscInt nrow,const PetscInt iro
     ierr = PetscFree2(bufr,bufc);CHKERRQ(ierr);
   }
   ierr = PetscLogEventEnd(MAT_SetValues,mat,0,0,0);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -2613,7 +2617,7 @@ PetscErrorCode MatMultHermitianTransposeAdd(Mat mat,Vec v1,Vec v2,Vec v3)
   ierr = VecLockPush(v1);CHKERRQ(ierr);
   if (mat->ops->multhermitiantransposeadd) {
     ierr = (*mat->ops->multhermitiantransposeadd)(mat,v1,v2,v3);CHKERRQ(ierr);
-   } else {
+  } else {
     Vec w,z;
     ierr = VecDuplicate(v1,&w);CHKERRQ(ierr);
     ierr = VecCopy(v1,w);CHKERRQ(ierr);
@@ -2622,7 +2626,11 @@ PetscErrorCode MatMultHermitianTransposeAdd(Mat mat,Vec v1,Vec v2,Vec v3)
     ierr = MatMultTranspose(mat,w,z);CHKERRQ(ierr);
     ierr = VecDestroy(&w);CHKERRQ(ierr);
     ierr = VecConjugate(z);CHKERRQ(ierr);
-    ierr = VecWAXPY(v3,1.0,v2,z);CHKERRQ(ierr);
+    if (v2 != v3) {
+      ierr = VecWAXPY(v3,1.0,v2,z);CHKERRQ(ierr);
+    } else {
+      ierr = VecAXPY(v3,1.0,z);CHKERRQ(ierr);
+    }
     ierr = VecDestroy(&z);CHKERRQ(ierr);
   }
   ierr = VecLockPop(v1);CHKERRQ(ierr);
@@ -2723,8 +2731,7 @@ PetscErrorCode MatMultTransposeConstrained(Mat mat,Vec x,Vec y)
 /*@C
    MatGetFactorType - gets the type of factorization it is
 
-   Note Collective
-   as the flag
+   Not Collective
 
    Input Parameters:
 .  mat - the matrix
@@ -2732,16 +2739,39 @@ PetscErrorCode MatMultTransposeConstrained(Mat mat,Vec x,Vec y)
    Output Parameters:
 .  t - the type, one of MAT_FACTOR_NONE, MAT_FACTOR_LU, MAT_FACTOR_CHOLESKY, MAT_FACTOR_ILU, MAT_FACTOR_ICC,MAT_FACTOR_ILUDT
 
-    Level: intermediate
+   Level: intermediate
 
-.seealso:    MatFactorType, MatGetFactor()
+.seealso: MatFactorType, MatGetFactor(), MatSetFactorType()
 @*/
 PetscErrorCode MatGetFactorType(Mat mat,MatFactorType *t)
 {
   PetscFunctionBegin;
   PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
   PetscValidType(mat,1);
+  PetscValidPointer(t,2);
   *t = mat->factortype;
+  PetscFunctionReturn(0);
+}
+
+/*@C
+   MatSetFactorType - sets the type of factorization it is
+
+   Logically Collective on Mat
+
+   Input Parameters:
++  mat - the matrix
+-  t - the type, one of MAT_FACTOR_NONE, MAT_FACTOR_LU, MAT_FACTOR_CHOLESKY, MAT_FACTOR_ILU, MAT_FACTOR_ICC,MAT_FACTOR_ILUDT
+
+   Level: intermediate
+
+.seealso: MatFactorType, MatGetFactor(), MatGetFactorType()
+@*/
+PetscErrorCode MatSetFactorType(Mat mat, MatFactorType t)
+{
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
+  PetscValidType(mat,1);
+  mat->factortype = t;
   PetscFunctionReturn(0);
 }
 
@@ -3281,6 +3311,7 @@ PetscErrorCode MatSolve(Mat mat,Vec b,Vec x)
     ierr = PetscInfo1(mat,"MatFactorError %D\n",mat->factorerrortype);CHKERRQ(ierr);
     ierr = VecSetInf(x);CHKERRQ(ierr);
   } else {
+    if (!mat->ops->solve) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Mat type %s",((PetscObject)mat)->type_name);
     ierr = (*mat->ops->solve)(mat,b,x);CHKERRQ(ierr);
   }
   ierr = PetscLogEventEnd(MAT_Solve,mat,b,x,0);CHKERRQ(ierr);
@@ -3490,17 +3521,16 @@ PetscErrorCode MatMatTransposeSolve(Mat A,Mat Bt,Mat X)
   PetscCheckSameComm(A,1,X,3);
 
   if (X == Bt) SETERRQ(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_IDN,"X and B must be different matrices");
-  if (!A->factortype) SETERRQ(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_WRONGSTATE,"Unfactored matrix");
   if (A->cmap->N != X->rmap->N) SETERRQ2(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_SIZ,"Mat A,Mat X: global dim %D %D",A->cmap->N,X->rmap->N);
   if (A->rmap->N != Bt->cmap->N) SETERRQ2(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_SIZ,"Mat A,Mat Bt: global dim %D %D",A->rmap->N,Bt->cmap->N);
   if (X->cmap->N < Bt->rmap->N) SETERRQ(PetscObjectComm((PetscObject)X),PETSC_ERR_ARG_SIZ,"Solution matrix must have same number of columns as row number of the rhs matrix");
   if (!A->rmap->N && !A->cmap->N) PetscFunctionReturn(0);
+  if (!A->factortype) SETERRQ(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_WRONGSTATE,"Unfactored matrix");
   MatCheckPreallocated(A,1);
 
+  if (!A->ops->mattransposesolve) SETERRQ1(PetscObjectComm((PetscObject)A),PETSC_ERR_SUP,"Mat type %s",((PetscObject)A)->type_name);
   ierr = PetscLogEventBegin(MAT_MatTrSolve,A,Bt,X,0);CHKERRQ(ierr);
-  if (A->ops->mattransposesolve) {
-    ierr = (*A->ops->mattransposesolve)(A,Bt,X);CHKERRQ(ierr);
-  } else SETERRQ(PetscObjectComm((PetscObject)A),PETSC_ERR_SUP,"MatMatTransposeSolve() is not supported for the input matrix types");
+  ierr = (*A->ops->mattransposesolve)(A,Bt,X);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_MatTrSolve,A,Bt,X,0);CHKERRQ(ierr);
   ierr = PetscObjectStateIncrease((PetscObject)X);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -3554,13 +3584,14 @@ PetscErrorCode MatForwardSolve(Mat mat,Vec b,Vec x)
   PetscCheckSameComm(mat,1,b,2);
   PetscCheckSameComm(mat,1,x,3);
   if (x == b) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_IDN,"x and b must be different vectors");
-  if (!mat->ops->forwardsolve) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Mat type %s",((PetscObject)mat)->type_name);
   if (mat->cmap->N != x->map->N) SETERRQ2(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_SIZ,"Mat mat,Vec x: global dim %D %D",mat->cmap->N,x->map->N);
   if (mat->rmap->N != b->map->N) SETERRQ2(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_SIZ,"Mat mat,Vec b: global dim %D %D",mat->rmap->N,b->map->N);
   if (mat->rmap->n != b->map->n) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ,"Mat mat,Vec b: local dim %D %D",mat->rmap->n,b->map->n);
   if (!mat->rmap->N && !mat->cmap->N) PetscFunctionReturn(0);
   if (!mat->factortype) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_WRONGSTATE,"Unfactored matrix");
   MatCheckPreallocated(mat,1);
+
+  if (!mat->ops->forwardsolve) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Mat type %s",((PetscObject)mat)->type_name);
   ierr = PetscLogEventBegin(MAT_ForwardSolve,mat,b,x,0);CHKERRQ(ierr);
   ierr = (*mat->ops->forwardsolve)(mat,b,x);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_ForwardSolve,mat,b,x,0);CHKERRQ(ierr);
@@ -3616,7 +3647,6 @@ PetscErrorCode MatBackwardSolve(Mat mat,Vec b,Vec x)
   PetscCheckSameComm(mat,1,b,2);
   PetscCheckSameComm(mat,1,x,3);
   if (x == b) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_IDN,"x and b must be different vectors");
-  if (!mat->ops->backwardsolve) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Mat type %s",((PetscObject)mat)->type_name);
   if (mat->cmap->N != x->map->N) SETERRQ2(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_SIZ,"Mat mat,Vec x: global dim %D %D",mat->cmap->N,x->map->N);
   if (mat->rmap->N != b->map->N) SETERRQ2(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_SIZ,"Mat mat,Vec b: global dim %D %D",mat->rmap->N,b->map->N);
   if (mat->rmap->n != b->map->n) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ,"Mat mat,Vec b: local dim %D %D",mat->rmap->n,b->map->n);
@@ -3624,6 +3654,7 @@ PetscErrorCode MatBackwardSolve(Mat mat,Vec b,Vec x)
   if (!mat->factortype) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_WRONGSTATE,"Unfactored matrix");
   MatCheckPreallocated(mat,1);
 
+  if (!mat->ops->backwardsolve) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Mat type %s",((PetscObject)mat)->type_name);
   ierr = PetscLogEventBegin(MAT_BackwardSolve,mat,b,x,0);CHKERRQ(ierr);
   ierr = (*mat->ops->backwardsolve)(mat,b,x);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_BackwardSolve,mat,b,x,0);CHKERRQ(ierr);
@@ -3743,7 +3774,6 @@ PetscErrorCode MatSolveTranspose(Mat mat,Vec b,Vec x)
   PetscCheckSameComm(mat,1,b,2);
   PetscCheckSameComm(mat,1,x,3);
   if (x == b) SETERRQ(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_IDN,"x and b must be different vectors");
-  if (!mat->ops->solvetranspose) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Matrix type %s",((PetscObject)mat)->type_name);
   if (mat->rmap->N != x->map->N) SETERRQ2(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_SIZ,"Mat mat,Vec x: global dim %D %D",mat->rmap->N,x->map->N);
   if (mat->cmap->N != b->map->N) SETERRQ2(PetscObjectComm((PetscObject)mat),PETSC_ERR_ARG_SIZ,"Mat mat,Vec b: global dim %D %D",mat->cmap->N,b->map->N);
   if (!mat->rmap->N && !mat->cmap->N) PetscFunctionReturn(0);
@@ -3754,6 +3784,7 @@ PetscErrorCode MatSolveTranspose(Mat mat,Vec b,Vec x)
     ierr = PetscInfo1(mat,"MatFactorError %D\n",mat->factorerrortype);CHKERRQ(ierr);
     ierr = VecSetInf(x);CHKERRQ(ierr);
   } else {
+    if (!mat->ops->solvetranspose) SETERRQ1(PetscObjectComm((PetscObject)mat),PETSC_ERR_SUP,"Matrix type %s",((PetscObject)mat)->type_name);
     ierr = (*mat->ops->solvetranspose)(mat,b,x);CHKERRQ(ierr);
   }
   ierr = PetscLogEventEnd(MAT_SolveTranspose,mat,b,x,0);CHKERRQ(ierr);
@@ -4238,6 +4269,7 @@ PetscErrorCode MatSolverTypeRegister(MatSolverType package,MatType mtype,MatFact
   MatSolverTypeForSpecifcType inext,iprev = NULL;
 
   PetscFunctionBegin;
+  ierr = MatInitializePackage();CHKERRQ(ierr);
   if (!next) {
     ierr = PetscNew(&MatSolverTypeHolders);CHKERRQ(ierr);
     ierr = PetscStrallocpy(package,&MatSolverTypeHolders->name);CHKERRQ(ierr);
@@ -5033,7 +5065,7 @@ PetscErrorCode MatEqual(Mat A,Mat B,PetscBool  *flg)
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatDiagonalScale - Scales a matrix on the left and right by diagonal
    matrices that are stored as vectors.  Either of the two scaling
    matrices can be NULL.
@@ -5075,7 +5107,7 @@ PetscErrorCode MatDiagonalScale(Mat mat,Vec l,Vec r)
   ierr = (*mat->ops->diagonalscale)(mat,l,r);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_Scale,mat,0,0,0);CHKERRQ(ierr);
   ierr = PetscObjectStateIncrease((PetscObject)mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -5118,7 +5150,7 @@ PetscErrorCode MatScale(Mat mat,PetscScalar a)
   if (a != (PetscScalar)1.0) {
     ierr = (*mat->ops->scale)(mat,a);CHKERRQ(ierr);
     ierr = PetscObjectStateIncrease((PetscObject)mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
     if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
       mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
     }
@@ -5350,7 +5382,7 @@ PetscErrorCode MatAssemblyEnd(Mat mat,MatAssemblyType type)
     mat->hermitian_set              = PETSC_FALSE;
     mat->structurally_symmetric_set = PETSC_FALSE;
   }
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -5658,7 +5690,7 @@ PetscErrorCode MatZeroEntries(Mat mat)
   ierr = (*mat->ops->zeroentries)(mat);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_ZeroEntries,mat,0,0,0);CHKERRQ(ierr);
   ierr = PetscObjectStateIncrease((PetscObject)mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -5666,7 +5698,7 @@ PetscErrorCode MatZeroEntries(Mat mat)
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRowsColumns - Zeros all entries (except possibly the main diagonal)
    of a set of rows and columns of a matrix.
 
@@ -5720,7 +5752,7 @@ PetscErrorCode MatZeroRowsColumns(Mat mat,PetscInt numRows,const PetscInt rows[]
   ierr = (*mat->ops->zerorowscolumns)(mat,numRows,rows,diag,x,b);CHKERRQ(ierr);
   ierr = MatViewFromOptions(mat,NULL,"-mat_view");CHKERRQ(ierr);
   ierr = PetscObjectStateIncrease((PetscObject)mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -5728,7 +5760,7 @@ PetscErrorCode MatZeroRowsColumns(Mat mat,PetscInt numRows,const PetscInt rows[]
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRowsColumnsIS - Zeros all entries (except possibly the main diagonal)
    of a set of rows and columns of a matrix.
 
@@ -5783,7 +5815,7 @@ PetscErrorCode MatZeroRowsColumnsIS(Mat mat,IS is,PetscScalar diag,Vec x,Vec b)
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRows - Zeros all entries (except possibly the main diagonal)
    of a set of rows of a matrix.
 
@@ -5844,7 +5876,7 @@ PetscErrorCode MatZeroRows(Mat mat,PetscInt numRows,const PetscInt rows[],PetscS
   ierr = (*mat->ops->zerorows)(mat,numRows,rows,diag,x,b);CHKERRQ(ierr);
   ierr = MatViewFromOptions(mat,NULL,"-mat_view");CHKERRQ(ierr);
   ierr = PetscObjectStateIncrease((PetscObject)mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -5852,7 +5884,7 @@ PetscErrorCode MatZeroRows(Mat mat,PetscInt numRows,const PetscInt rows[],PetscS
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRowsIS - Zeros all entries (except possibly the main diagonal)
    of a set of rows of a matrix.
 
@@ -5913,7 +5945,7 @@ PetscErrorCode MatZeroRowsIS(Mat mat,IS is,PetscScalar diag,Vec x,Vec b)
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRowsStencil - Zeros all entries (except possibly the main diagonal)
    of a set of rows of a matrix. These rows must be local to the process.
 
@@ -6014,7 +6046,7 @@ PetscErrorCode MatZeroRowsStencil(Mat mat,PetscInt numRows,const MatStencil rows
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRowsColumnsStencil - Zeros all row and column entries (except possibly the main diagonal)
    of a set of rows and columns of a matrix.
 
@@ -6183,7 +6215,7 @@ PetscErrorCode MatZeroRowsLocal(Mat mat,PetscInt numRows,const PetscInt rows[],P
     ierr = ISDestroy(&is);CHKERRQ(ierr);
   }
   ierr = PetscObjectStateIncrease((PetscObject)mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -6191,7 +6223,7 @@ PetscErrorCode MatZeroRowsLocal(Mat mat,PetscInt numRows,const PetscInt rows[],P
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRowsLocalIS - Zeros all entries (except possibly the main diagonal)
    of a set of rows of a matrix; using local numbering of rows.
 
@@ -6251,7 +6283,7 @@ PetscErrorCode MatZeroRowsLocalIS(Mat mat,IS is,PetscScalar diag,Vec x,Vec b)
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRowsColumnsLocal - Zeros all entries (except possibly the main diagonal)
    of a set of rows and columns of a matrix; using local numbering of rows.
 
@@ -6303,7 +6335,7 @@ PetscErrorCode MatZeroRowsColumnsLocal(Mat mat,PetscInt numRows,const PetscInt r
   ierr = ISDestroy(&newis);CHKERRQ(ierr);
   ierr = ISDestroy(&is);CHKERRQ(ierr);
   ierr = PetscObjectStateIncrease((PetscObject)mat);CHKERRQ(ierr);
-#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_VECCUDA)
+#if defined(PETSC_HAVE_VIENNACL) || defined(PETSC_HAVE_CUDA)
   if (mat->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
     mat->valid_GPU_matrix = PETSC_OFFLOAD_CPU;
   }
@@ -6311,7 +6343,7 @@ PetscErrorCode MatZeroRowsColumnsLocal(Mat mat,PetscInt numRows,const PetscInt r
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatZeroRowsColumnsLocalIS - Zeros all entries (except possibly the main diagonal)
    of a set of rows and columns of a matrix; using local numbering of rows.
 
@@ -7223,6 +7255,72 @@ PetscErrorCode MatSetBlockSize(Mat mat,PetscInt bs)
 }
 
 /*@
+   MatSetVariableBlockSizes - Sets a diagonal blocks of the matrix that need not be of the same size
+
+   Logically Collective on Mat
+
+   Input Parameters:
++  mat - the matrix
+.  nblocks - the number of blocks on this process
+-  bsizes - the block sizes
+
+   Notes:
+    Currently used by PCVPBJACOBI for SeqAIJ matrices
+
+   Level: intermediate
+
+   Concepts: matrices^block size
+
+.seealso: MatCreateSeqBAIJ(), MatCreateBAIJ(), MatGetBlockSize(), MatSetBlockSizes(), MatGetBlockSizes(), MatGetVariableBlockSizes()
+@*/
+PetscErrorCode MatSetVariableBlockSizes(Mat mat,PetscInt nblocks,PetscInt *bsizes)
+{
+  PetscErrorCode ierr;
+  PetscInt       i,ncnt = 0, nlocal;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
+  if (nblocks < 0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ,"Number of local blocks must be great than or equal to zero");
+  ierr = MatGetLocalSize(mat,&nlocal,NULL);CHKERRQ(ierr);
+  for (i=0; i<nblocks; i++) ncnt += bsizes[i];
+  if (ncnt != nlocal) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_ARG_SIZ,"Sum of local block sizes %D does not equal local size of matrix %D",ncnt,nlocal);
+  ierr = PetscFree(mat->bsizes);CHKERRQ(ierr);
+  mat->nblocks = nblocks;
+  ierr = PetscMalloc1(nblocks,&mat->bsizes);CHKERRQ(ierr);
+  ierr = PetscMemcpy(mat->bsizes,bsizes,nblocks*sizeof(PetscInt));CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+/*@C
+   MatGetVariableBlockSizes - Gets a diagonal blocks of the matrix that need not be of the same size
+
+   Logically Collective on Mat
+
+   Input Parameters:
+.  mat - the matrix
+
+   Output Parameters:
++  nblocks - the number of blocks on this process
+-  bsizes - the block sizes
+
+   Notes: Currently not supported from Fortran
+
+   Level: intermediate
+
+   Concepts: matrices^block size
+
+.seealso: MatCreateSeqBAIJ(), MatCreateBAIJ(), MatGetBlockSize(), MatSetBlockSizes(), MatGetBlockSizes(), MatSetVariableBlockSizes()
+@*/
+PetscErrorCode MatGetVariableBlockSizes(Mat mat,PetscInt *nblocks,const PetscInt **bsizes)
+{
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
+  *nblocks = mat->nblocks;
+  *bsizes  = mat->bsizes;
+  PetscFunctionReturn(0);
+}
+
+/*@
    MatSetBlockSizes - Sets the matrix block row and column sizes.
 
    Logically Collective on Mat
@@ -7373,7 +7471,7 @@ PetscErrorCode MatResidual(Mat mat,Vec b,Vec x,Vec r)
 
     Output Parameters:
 +   n - number of rows in the (possibly compressed) matrix
-.   ia - the row pointers [of length n+1]
+.   ia - the row pointers; that is ia[0] = 0, ia[row] = ia[row-1] + number of elements in that row of the matrix
 .   ja - the column indices
 -   done - indicates if the routine actually worked and returned appropriate ia[] and ja[] arrays; callers
            are responsible for handling the case when done == PETSC_FALSE and ia and ja are not set
@@ -7437,16 +7535,11 @@ PetscErrorCode MatGetRowIJ(Mat mat,PetscInt shift,PetscBool symmetric,PetscBool 
                  inodes or the nonzero elements is wanted. For BAIJ matrices the compressed version is
                  always used.
 .   n - number of columns in the (possibly compressed) matrix
-.   ia - the column pointers
+.   ia - the column pointers; that is ia[0] = 0, ia[col] = i[col-1] + number of elements in that col of the matrix
 -   ja - the row indices
 
     Output Parameters:
 .   done - PETSC_TRUE or PETSC_FALSE, indicating whether the values have been returned
-
-    Note:
-    This routine zeros out n, ia, and ja. This is to prevent accidental
-    us of the array after it has been restored. If you pass NULL, it will
-    not zero the pointers.  Use of ia or ja after MatRestoreColumnIJ() is invalid.
 
     Level: developer
 
@@ -8149,7 +8242,7 @@ PetscErrorCode MatRestrict(Mat A,Vec x,Vec y)
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatGetNullSpace - retrieves the null space of a matrix.
 
    Logically Collective on Mat and MatNullSpace
@@ -8173,7 +8266,7 @@ PetscErrorCode MatGetNullSpace(Mat mat, MatNullSpace *nullsp)
   PetscFunctionReturn(0);
 }
 
-/*@C
+/*@
    MatSetNullSpace - attaches a null space to a matrix.
 
    Logically Collective on Mat and MatNullSpace
@@ -8283,10 +8376,8 @@ PetscErrorCode MatSetTransposeNullSpace(Mat mat,MatNullSpace nullsp)
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
-  PetscValidType(mat,1);
-  PetscValidHeaderSpecific(nullsp,MAT_NULLSPACE_CLASSID,2);
-  MatCheckPreallocated(mat,1);
-  ierr = PetscObjectReference((PetscObject)nullsp);CHKERRQ(ierr);
+  if (nullsp) PetscValidHeaderSpecific(nullsp,MAT_NULLSPACE_CLASSID,2);
+  if (nullsp) {ierr = PetscObjectReference((PetscObject)nullsp);CHKERRQ(ierr);}
   ierr = MatNullSpaceDestroy(&mat->transnullsp);CHKERRQ(ierr);
   mat->transnullsp = nullsp;
   PetscFunctionReturn(0);
@@ -8823,7 +8914,7 @@ PetscErrorCode MatCreateVecs(Mat mat,Vec *right,Vec *left)
       ierr = VecCreate(PetscObjectComm((PetscObject)mat),right);CHKERRQ(ierr);
       ierr = VecSetSizes(*right,mat->cmap->n,PETSC_DETERMINE);CHKERRQ(ierr);
       ierr = VecSetBlockSize(*right,cbs);CHKERRQ(ierr);
-      ierr = VecSetType(*right,VECSTANDARD);CHKERRQ(ierr);
+      ierr = VecSetType(*right,mat->defaultvectype);CHKERRQ(ierr);
       ierr = PetscLayoutReference(mat->cmap,&(*right)->map);CHKERRQ(ierr);
     }
     if (left) {
@@ -8831,7 +8922,7 @@ PetscErrorCode MatCreateVecs(Mat mat,Vec *right,Vec *left)
       ierr = VecCreate(PetscObjectComm((PetscObject)mat),left);CHKERRQ(ierr);
       ierr = VecSetSizes(*left,mat->rmap->n,PETSC_DETERMINE);CHKERRQ(ierr);
       ierr = VecSetBlockSize(*left,rbs);CHKERRQ(ierr);
-      ierr = VecSetType(*left,VECSTANDARD);CHKERRQ(ierr);
+      ierr = VecSetType(*left,mat->defaultvectype);CHKERRQ(ierr);
       ierr = PetscLayoutReference(mat->rmap,&(*left)->map);CHKERRQ(ierr);
     }
   }
@@ -9288,6 +9379,9 @@ PetscErrorCode MatPtAP(Mat A,Mat P,MatReuse scall,PetscReal fill,Mat *C)
   ierr = PetscLogEventBegin(MAT_PtAP,A,P,0,0);CHKERRQ(ierr);
   ierr = (*ptap)(A,P,scall,fill,C);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_PtAP,A,P,0,0);CHKERRQ(ierr);
+  if (A->symmetric_set && A->symmetric) {
+    ierr = MatSetOption(*C,MAT_SYMMETRIC,PETSC_TRUE);CHKERRQ(ierr);
+  }
   PetscFunctionReturn(0);
 }
 
@@ -10209,7 +10303,7 @@ PetscErrorCode   MatGetMultiProcBlock(Mat mat, MPI_Comm subComm, MatReuse scall,
    MatSetValuesBlockedLocal() will also be implemented.
 
    The mat must have had a ISLocalToGlobalMapping provided to it with MatSetLocalToGlobalMapping(). Note that
-   matrices obtained with DMCreateMat() generally already have the local to global mapping provided.
+   matrices obtained with DMCreateMatrix() generally already have the local to global mapping provided.
 
 .seealso: MatRestoreLocalSubMatrix(), MatCreateLocalRef(), MatSetLocalToGlobalMapping()
 @*/
@@ -10385,6 +10479,39 @@ PetscErrorCode MatInvertBlockDiagonal(Mat mat,const PetscScalar **values)
   PetscFunctionReturn(0);
 }
 
+/*@C
+  MatInvertVariableBlockDiagonal - Inverts the block diagonal entries.
+
+  Collective on Mat
+
+  Input Parameters:
++ mat - the matrix
+. nblocks - the number of blocks
+- bsizes - the size of each block
+
+  Output Parameters:
+. values - the block inverses in column major order (FORTRAN-like)
+
+   Note:
+   This routine is not available from Fortran.
+
+  Level: advanced
+
+.seealso: MatInvertBockDiagonal()
+@*/
+PetscErrorCode MatInvertVariableBlockDiagonal(Mat mat,PetscInt nblocks,const PetscInt *bsizes,PetscScalar *values)
+{
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
+  if (!mat->assembled) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Not for unassembled matrix");
+  if (mat->factortype) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE,"Not for factored matrix");
+  if (!mat->ops->invertvariableblockdiagonal) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"Not supported");
+  ierr = (*mat->ops->invertvariableblockdiagonal)(mat,nblocks,bsizes,values);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 /*@
   MatInvertBlockDiagonalMat - set matrix C to be the inverted block diagonal of matrix A
 
@@ -10395,6 +10522,8 @@ PetscErrorCode MatInvertBlockDiagonal(Mat mat,const PetscScalar **values)
 
   Output Parameters:
 . C - matrix with inverted block diagonal of A.  This matrix should be created and may have its type set.
+
+  Notes: the blocksize of the matrix is used to determine the blocks on the diagonal of C
 
   Level: advanced
 
@@ -10415,9 +10544,7 @@ PetscErrorCode MatInvertBlockDiagonalMat(Mat A,Mat C)
   ierr = MatSetSizes(C,m,n,M,N);CHKERRQ(ierr);
   ierr = MatSetBlockSize(C,bs);CHKERRQ(ierr);
   ierr = PetscMalloc1(m/bs,&dnnz);CHKERRQ(ierr);
-  for(j = 0; j < m/bs; j++) {
-    dnnz[j] = 1;
-  }
+  for (j = 0; j < m/bs; j++) dnnz[j] = 1;
   ierr = MatXAIJSetPreallocation(C,bs,dnnz,NULL,NULL,NULL);CHKERRQ(ierr);
   ierr = PetscFree(dnnz);CHKERRQ(ierr);
   ierr = MatGetOwnershipRange(C,&rstart,&rend);CHKERRQ(ierr);

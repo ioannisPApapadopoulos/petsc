@@ -248,7 +248,7 @@ PETSC_INTERN PetscFPT PetscFPTData;
 PETSC_INTERN PetscErrorCode  PetscInitializeSAWs(const char[]);
 #endif
 
-PETSC_EXTERN PetscMPIInt MPIAPI Petsc_DelShared(MPI_Comm,PetscMPIInt,void *,void *);
+PETSC_EXTERN PetscMPIInt MPIAPI Petsc_DelComm_Shm(MPI_Comm,PetscMPIInt,void *,void *);
 
 /*
     petscinitialize - Version called from Fortran.
@@ -428,7 +428,7 @@ static void petscinitialize_internal(char* filename, PetscInt len, PetscBool rea
   if (*ierr) {(*PetscErrorPrintf)("PetscInitialize:Creating MPI keyvals\n");return;}
   *ierr = MPI_Comm_create_keyval(MPI_COMM_NULL_COPY_FN,Petsc_DelComm_Inner,&Petsc_OuterComm_keyval,(void*)0);
   if (*ierr) {(*PetscErrorPrintf)("PetscInitialize:Creating MPI keyvals\n");return;}
-  *ierr = MPI_Comm_create_keyval(MPI_COMM_NULL_COPY_FN,Petsc_DelShared,&Petsc_Shared_keyval,(void*)0);
+  *ierr = MPI_Comm_create_keyval(MPI_COMM_NULL_COPY_FN,Petsc_DelComm_Shm,&Petsc_ShmComm_keyval,(void*)0);
   if (*ierr) {(*PetscErrorPrintf)("PetscInitialize:Creating MPI keyvals\n");return;}
 
   /*
@@ -442,8 +442,9 @@ static void petscinitialize_internal(char* filename, PetscInt len, PetscBool rea
     PETScParseFortranArgs_Private(&PetscGlobalArgc,&PetscGlobalArgs);
     FIXCHAR(filename,len,t1);
     *ierr = PetscOptionsInsert(NULL,&PetscGlobalArgc,&PetscGlobalArgs,t1);
-    FREECHAR(filename,t1);
     if (*ierr) {(*PetscErrorPrintf)("PetscInitialize:Creating options database\n");return;}
+    FREECHAR(filename,t1);
+    if (*ierr) {(*PetscErrorPrintf)("PetscInitialize:Freeing string in creating options database\n");return;}
   }
   *ierr = PetscOptionsCheckInitial_Private();
   if (*ierr) {(*PetscErrorPrintf)("PetscInitialize:Checking initial options\n");return;}

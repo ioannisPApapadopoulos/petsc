@@ -68,6 +68,7 @@ typedef struct _TSTrajectoryOps *TSTrajectoryOps;
 
 struct _TSTrajectoryOps {
   PetscErrorCode (*view)(TSTrajectory,PetscViewer);
+  PetscErrorCode (*reset)(TSTrajectory);
   PetscErrorCode (*destroy)(TSTrajectory);
   PetscErrorCode (*set)(TSTrajectory,TS,PetscInt,PetscReal,Vec);
   PetscErrorCode (*get)(TSTrajectory,TS,PetscInt,PetscReal*);
@@ -75,8 +76,41 @@ struct _TSTrajectoryOps {
   PetscErrorCode (*setup)(TSTrajectory,TS);
 };
 
+/* TSHistory is an helper object that allows inquiring
+   the TSTrajectory by time and not by the step number only */
+typedef struct _n_TSHistory* TSHistory;
+
 struct _p_TSTrajectory {
   PETSCHEADER(struct _TSTrajectoryOps);
+  TSHistory tsh;        /* associates times to unique step ids */
+  /* stores necessary data to reconstruct states and derivatives via Lagrangian interpolation */
+  struct {
+    PetscInt    order;  /* interpolation order */
+    Vec         *W;     /* work vectors */
+    PetscScalar *L;     /* workspace for Lagrange basis */
+    PetscReal   *T;     /* Lagrange times (stored) */
+    Vec         *WW;    /* just an array of pointers */
+    PetscBool   *TT;    /* workspace for Lagrange */
+    PetscReal   *TW;    /* Lagrange times (workspace) */
+
+    /* caching */
+    PetscBool caching;
+    struct {
+      PetscObjectId    id;
+      PetscObjectState state;
+      PetscReal        time;
+      PetscInt         step;
+    } Ucached;
+    struct {
+      PetscObjectId    id;
+      PetscObjectState state;
+      PetscReal        time;
+      PetscInt         step;
+    } Udotcached;
+  } lag;
+  Vec            U,Udot;                  /* used by TSTrajectory{Get|Restore}UpdatedHistoryVecs */
+  PetscBool      solution_only;           /* whether we dump just the solution or also the stages */
+  PetscBool      adjoint_solve_mode;      /* whether we will use the Trajectory inside a TSAdjointSolve() or not */
   PetscViewer    monitor;
   PetscInt       setupcalled;             /* true if setup has been called */
   PetscInt       recomps;                 /* counter for recomputations in the adjoint run */
@@ -89,6 +123,15 @@ struct _p_TSTrajectory {
   PetscErrorCode (*transformdestroy)(void*);
   void*          transformctx;
   void           *data;
+};
+
+typedef struct _TS_RHSSplitLink *TS_RHSSplitLink;
+struct _TS_RHSSplitLink {
+  TS              ts;
+  char            *splitname;
+  IS              is;
+  TS_RHSSplitLink next;
+  PetscLogEvent   event;
 };
 
 struct _p_TS {
@@ -220,6 +263,10 @@ struct _p_TS {
   /* ------------------- Default work-area management ------------------ */
   PetscInt nwork;
   Vec      *work;
+
+  /* ---------------------- RHS splitting support ---------------------------------*/
+  PetscInt        num_rhs_splits;
+  TS_RHSSplitLink tsrhssplit;
 };
 
 struct _TSAdaptOps {
@@ -250,6 +297,7 @@ struct _p_TSAdapt {
   PetscReal   clip[2];            /* admissible time step decrease/increase factors */
   PetscReal   dt_min,dt_max;      /* admissible minimum and maximum time step */
   PetscReal   scale_solve_failed; /* scale step by this factor if solver (linear or nonlinear) fails. */
+  PetscReal   matchstepfac[2];    /* factors to control the behaviour of matchstep */
   NormType    wnormtype;
   PetscViewer monitor;
   PetscInt    timestepjustincreased;
@@ -401,8 +449,15 @@ PETSC_STATIC_INLINE PetscErrorCode TSCheckImplicitTerm(TS ts)
   PetscFunctionReturn(0);
 }
 
+PETSC_INTERN PetscErrorCode TSGetRHSMats_Private(TS,Mat*,Mat*);
+/* this is declared here as TSHistory is not public */
+PETSC_INTERN PetscErrorCode TSAdaptHistorySetTSHistory(TSAdapt,TSHistory,PetscBool);
+
+PETSC_INTERN PetscErrorCode TSTrajectoryReconstruct_Private(TSTrajectory,TS,PetscReal,Vec,Vec);
+
 PETSC_EXTERN PetscLogEvent TSTrajectory_Set;
 PETSC_EXTERN PetscLogEvent TSTrajectory_Get;
+PETSC_EXTERN PetscLogEvent TSTrajectory_GetVecs;
 PETSC_EXTERN PetscLogEvent TSTrajectory_DiskWrite;
 PETSC_EXTERN PetscLogEvent TSTrajectory_DiskRead;
 

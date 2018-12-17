@@ -370,6 +370,9 @@ PetscErrorCode FormFunctionLocal(DMDALocalInfo *info,Field **x,Field **f,void *p
   PetscFunctionReturn(0);
 }
 
+/*
+    Performs sweeps of point block nonlinear Gauss-Seidel on all the local grid points 
+*/
 PetscErrorCode NonlinearGS(SNES snes, Vec X, Vec B, void *ctx)
 {
   DMDALocalInfo  info;
@@ -508,6 +511,7 @@ PetscErrorCode NonlinearGS(SNES snes, Vec X, Vec B, void *ctx)
         fv          = 0.0;
         fomega      = 0.0;
         ftemp       = 0.0;
+        /*  Run Newton's method on a single grid point */
         for (l = 0; l < max_its && !ptconverged; l++) {
           if (B) {
             bjiu     = b[j][i].u;
@@ -625,9 +629,7 @@ PetscErrorCode NonlinearGS(SNES snes, Vec X, Vec B, void *ctx)
           pxnorm = PetscRealPart(x[j][i].u*x[j][i].u + x[j][i].v*x[j][i].v + x[j][i].omega*x[j][i].omega + x[j][i].temp*x[j][i].temp);
           pxnorm = PetscSqrtReal(pxnorm);
           if (l == 0) pfnorm0 = pfnorm;
-          if (rtol*pfnorm0 >pfnorm ||
-              atol > pfnorm ||
-              pxnorm*stol > pynorm) ptconverged = PETSC_TRUE;
+          if (rtol*pfnorm0 >pfnorm || atol > pfnorm || pxnorm*stol > pynorm) ptconverged = PETSC_TRUE;
         }
       }
     }
@@ -1031,5 +1033,75 @@ PetscErrorCode NonlinearGS(SNES snes, Vec X, Vec B, void *ctx)
       suffix: umfpack
       requires: suitesparse
       args: -da_refine 2 -pc_type lu -pc_factor_mat_solver_type umfpack -snes_view -snes_monitor_short -ksp_monitor_short
+
+   test:
+      suffix: tut_1
+      nsize: 4
+      requires: !single
+      args: -da_refine 5 -snes_monitor -ksp_monitor -snes_view
+
+   test:
+      suffix: tut_2
+      nsize: 4
+      requires: !single
+      args: -da_refine 5 -snes_monitor -ksp_monitor -snes_view -pc_type mg
+
+   test:
+      suffix: tut_3
+      nsize: 4
+      requires: hypre !single
+      args: -da_refine 5 -snes_monitor -ksp_monitor -snes_view -pc_type hypre
+
+   test:
+      suffix: tut_8
+      nsize: 4
+      requires: ml !single
+      args: -da_refine 5 -snes_monitor -ksp_monitor -snes_view -pc_type ml
+
+   test:
+      suffix: tut_4
+      nsize: 1
+      requires: !single
+      args: -da_refine 5 -log_view
+      filter: head -n 2
+      filter_output: head -n 2
+
+   test:
+      suffix: tut_5
+      nsize: 1
+      requires: !single
+      args: -da_refine 5 -log_view -pc_type mg
+      filter: head -n 2
+      filter_output: head -n 2
+
+   test:
+      suffix: tut_6
+      nsize: 4
+      requires: !single
+      args: -da_refine 5 -log_view
+      filter: head -n 2
+      filter_output: head -n 2
+
+   test:
+      suffix: tut_7
+      nsize: 4
+      requires: !single
+      args: -da_refine 5 -log_view -pc_type mg
+      filter: head -n 2
+      filter_output: head -n 2
+
+   test:
+      suffix: cuda_1
+      nsize: 1
+      requires: cuda
+      args: -snes_monitor -dm_mat_type seqaijcusparse -dm_vec_type seqcuda -pc_type gamg -ksp_monitor
+
+
+   test:
+      suffix: cuda_2
+      nsize: 3
+      requires: cuda
+      args: -snes_monitor -dm_mat_type mpiaijcusparse -dm_vec_type mpicuda -pc_type gamg -ksp_monitor
+
 
 TEST*/

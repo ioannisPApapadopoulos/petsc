@@ -4,6 +4,7 @@
 #if !defined(__PETSCPC_H)
 #define __PETSCPC_H
 #include <petscmat.h>
+#include <petscdmtypes.h>
 #include <petscpctypes.h>
 
 PETSC_EXTERN PetscErrorCode PCInitializePackage(void);
@@ -16,6 +17,23 @@ PETSC_EXTERN PetscFunctionList PCList;
 
 /* Logging support */
 PETSC_EXTERN PetscClassId PC_CLASSID;
+
+/* Arrays of names for options in implementation PCs */
+PETSC_EXTERN const char *const *const PCSides;
+PETSC_EXTERN const char *const PCJacobiTypes[];
+PETSC_EXTERN const char *const PCASMTypes[];
+PETSC_EXTERN const char *const PCGASMTypes[];
+PETSC_EXTERN const char *const PCCompositeTypes[];
+PETSC_EXTERN const char *const PCFieldSplitSchurPreTypes[];
+PETSC_EXTERN const char *const PCFieldSplitSchurFactTypes[];
+PETSC_EXTERN const char *const PCPARMSGlobalTypes[];
+PETSC_EXTERN const char *const PCPARMSLocalTypes[];
+PETSC_EXTERN const char *const PCMGTypes[];
+PETSC_EXTERN const char *const PCMGCycleTypes[];
+PETSC_EXTERN const char *const PCMGGalerkinTypes[];
+PETSC_EXTERN const char *const PCExoticTypes[];
+PETSC_EXTERN const char *const PCPatchConstructTypes[];
+PETSC_EXTERN const char *const PCFailedReasons[];
 
 PETSC_EXTERN PetscErrorCode PCCreate(MPI_Comm,PC*);
 PETSC_EXTERN PetscErrorCode PCSetType(PC,PCType);
@@ -74,6 +92,14 @@ PETSC_EXTERN PetscErrorCode PCGetDiagonalScale(PC,PetscBool *);
 PETSC_EXTERN PetscErrorCode PCDiagonalScaleLeft(PC,Vec,Vec);
 PETSC_EXTERN PetscErrorCode PCDiagonalScaleRight(PC,Vec,Vec);
 PETSC_EXTERN PetscErrorCode PCSetDiagonalScale(PC,Vec);
+
+PETSC_EXTERN PetscErrorCode PCSetDM(PC,DM);
+PETSC_EXTERN PetscErrorCode PCGetDM(PC,DM*);
+
+PETSC_EXTERN PetscErrorCode PCSetCoordinates(PC,PetscInt,PetscInt,PetscReal*);
+
+PETSC_EXTERN PetscErrorCode PCSetApplicationContext(PC,void*);
+PETSC_EXTERN PetscErrorCode PCGetApplicationContext(PC,void*);
 
 /* ------------- options specific to particular preconditioners --------- */
 
@@ -233,20 +259,25 @@ PETSC_EXTERN PetscErrorCode PCFieldSplitSchurGetS(PC,Mat *S);
 PETSC_EXTERN PetscErrorCode PCFieldSplitSchurRestoreS(PC,Mat *S);
 PETSC_EXTERN PetscErrorCode PCFieldSplitGetDetectSaddlePoint(PC,PetscBool*);
 PETSC_EXTERN PetscErrorCode PCFieldSplitSetDetectSaddlePoint(PC,PetscBool);
+PETSC_EXTERN PetscErrorCode PCFieldSplitSetGKBTol(PC,PetscReal);
+PETSC_EXTERN PetscErrorCode PCFieldSplitSetGKBNu(PC,PetscReal);
+PETSC_EXTERN PetscErrorCode PCFieldSplitSetGKBMaxit(PC,PetscInt);
+PETSC_EXTERN PetscErrorCode PCFieldSplitSetGKBDelay(PC,PetscInt);
 
 PETSC_EXTERN PetscErrorCode PCGalerkinSetRestriction(PC,Mat);
 PETSC_EXTERN PetscErrorCode PCGalerkinSetInterpolation(PC,Mat);
 PETSC_EXTERN PetscErrorCode PCGalerkinSetComputeSubmatrix(PC,PetscErrorCode (*)(PC,Mat,Mat,Mat*,void*),void*);
 
-PETSC_EXTERN PetscErrorCode PCSetCoordinates(PC,PetscInt,PetscInt,PetscReal*);
-
 PETSC_EXTERN PetscErrorCode PCPythonSetType(PC,const char[]);
 
-PETSC_EXTERN PetscErrorCode PCSetDM(PC,DM);
-PETSC_EXTERN PetscErrorCode PCGetDM(PC,DM*);
+PETSC_EXTERN PetscErrorCode PCBiCGStabCUSPSetTolerance(PC,PetscReal);
+PETSC_EXTERN PetscErrorCode PCBiCGStabCUSPSetIterations(PC,PetscInt);
+PETSC_EXTERN PetscErrorCode PCBiCGStabCUSPSetUseVerboseMonitor(PC,PetscBool);
 
-PETSC_EXTERN PetscErrorCode PCSetApplicationContext(PC,void*);
-PETSC_EXTERN PetscErrorCode PCGetApplicationContext(PC,void*);
+PETSC_EXTERN PetscErrorCode PCAINVCUSPSetDropTolerance(PC,PetscReal);
+PETSC_EXTERN PetscErrorCode PCAINVCUSPUseScaling(PC,PetscBool);
+PETSC_EXTERN PetscErrorCode PCAINVCUSPSetNonzeros(PC,PetscInt);
+PETSC_EXTERN PetscErrorCode PCAINVCUSPSetLinParameter(PC,PetscInt);
 
 PETSC_EXTERN PetscErrorCode PCPARMSSetGlobal(PC,PCPARMSGlobalType);
 PETSC_EXTERN PetscErrorCode PCPARMSSetLocal(PC,PCPARMSLocalType);
@@ -282,6 +313,8 @@ PETSC_EXTERN PetscErrorCode PCBDDCSetDivergenceMat(PC,Mat,PetscBool,IS);
 PETSC_EXTERN PetscErrorCode PCBDDCSetChangeOfBasisMat(PC,Mat,PetscBool);
 PETSC_EXTERN PetscErrorCode PCBDDCSetPrimalVerticesIS(PC,IS);
 PETSC_EXTERN PetscErrorCode PCBDDCSetPrimalVerticesLocalIS(PC,IS);
+PETSC_EXTERN PetscErrorCode PCBDDCGetPrimalVerticesIS(PC,IS*);
+PETSC_EXTERN PetscErrorCode PCBDDCGetPrimalVerticesLocalIS(PC,IS*);
 PETSC_EXTERN PetscErrorCode PCBDDCSetCoarseningRatio(PC,PetscInt);
 PETSC_EXTERN PetscErrorCode PCBDDCSetLevels(PC,PetscInt);
 PETSC_EXTERN PetscErrorCode PCBDDCSetDirichletBoundaries(PC,IS);
@@ -298,6 +331,8 @@ PETSC_EXTERN PetscErrorCode PCBDDCSetLocalAdjacencyGraph(PC,PetscInt,const Petsc
 PETSC_EXTERN PetscErrorCode PCBDDCCreateFETIDPOperators(PC,PetscBool,const char*,Mat*,PC*);
 PETSC_EXTERN PetscErrorCode PCBDDCMatFETIDPGetRHS(Mat,Vec,Vec);
 PETSC_EXTERN PetscErrorCode PCBDDCMatFETIDPGetSolution(Mat,Vec,Vec);
+PETSC_EXTERN PetscErrorCode PCBDDCFinalizePackage(void);
+PETSC_EXTERN PetscErrorCode PCBDDCInitializePackage(void);
 
 PETSC_EXTERN PetscErrorCode PCISSetUseStiffnessScaling(PC,PetscBool);
 PETSC_EXTERN PetscErrorCode PCISSetSubdomainScalingFactor(PC,PetscScalar);
@@ -343,9 +378,26 @@ PETSC_EXTERN PetscErrorCode PCTelescopeGetIgnoreKSPComputeOperators(PC,PetscBool
 PETSC_EXTERN PetscErrorCode PCTelescopeSetIgnoreKSPComputeOperators(PC,PetscBool);
 PETSC_EXTERN PetscErrorCode PCTelescopeGetDM(PC,DM*);
 
+PETSC_EXTERN PetscErrorCode PCPatchSetSaveOperators(PC, PetscBool);
+PETSC_EXTERN PetscErrorCode PCPatchGetSaveOperators(PC, PetscBool *);
+PETSC_EXTERN PetscErrorCode PCPatchSetPartitionOfUnity(PC, PetscBool);
+PETSC_EXTERN PetscErrorCode PCPatchGetPartitionOfUnity(PC, PetscBool *);
+PETSC_EXTERN PetscErrorCode PCPatchSetMultiplicative(PC, PetscBool);
+PETSC_EXTERN PetscErrorCode PCPatchGetMultiplicative(PC, PetscBool *);
+PETSC_EXTERN PetscErrorCode PCPatchSetSubMatType(PC, MatType);
+PETSC_EXTERN PetscErrorCode PCPatchGetSubMatType(PC, MatType *);
+PETSC_EXTERN PetscErrorCode PCPatchSetCellNumbering(PC, PetscSection);
+PETSC_EXTERN PetscErrorCode PCPatchGetCellNumbering(PC, PetscSection *);
+PETSC_EXTERN PetscErrorCode PCPatchSetConstructType(PC, PCPatchConstructType,   PetscErrorCode (*)(PC, PetscInt *, IS **, IS *, void *), void *);
+PETSC_EXTERN PetscErrorCode PCPatchGetConstructType(PC, PCPatchConstructType *, PetscErrorCode (**)(PC, PetscInt *, IS **, IS *, void *), void **);
+PETSC_EXTERN PetscErrorCode PCPatchSetDiscretisationInfo(PC, PetscInt, DM *, PetscInt *, PetscInt *, const PetscInt **, const PetscInt *, PetscInt, const PetscInt *, PetscInt, const PetscInt *);
+PETSC_EXTERN PetscErrorCode PCPatchSetComputeOperator(PC, PetscErrorCode (*)(PC,PetscInt,Mat,IS,PetscInt,const PetscInt *,void *), void *);
+
 PETSC_EXTERN PetscErrorCode PCLMVMSetMatLMVM(PC, Mat);
 PETSC_EXTERN PetscErrorCode PCLMVMGetMatLMVM(PC, Mat*);
 PETSC_EXTERN PetscErrorCode PCLMVMSetIS(PC, IS);
 PETSC_EXTERN PetscErrorCode PCLMVMClearIS(PC);
+
+PETSC_EXTERN PetscErrorCode PCExoticSetType(PC,PCExoticType);
 
 #endif /* __PETSCPC_H */

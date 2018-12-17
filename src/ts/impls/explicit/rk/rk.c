@@ -366,6 +366,7 @@ PetscErrorCode TSRKRegister(TSRKType name,PetscInt order,PetscInt s,
   if (bembed) PetscValidRealPointer(bembed,7);
   if (binterp || p > 1) PetscValidRealPointer(binterp,9);
 
+  ierr = TSRKInitializePackage();CHKERRQ(ierr);
   ierr = PetscNew(&link);CHKERRQ(ierr);
   t = &link->tab;
 
@@ -991,8 +992,8 @@ static PetscErrorCode  TSGetStages_RK(TS ts,PetscInt *ns,Vec **Y)
   TS_RK *rk = (TS_RK*)ts->data;
 
   PetscFunctionBegin;
-  *ns = rk->tableau->s;
-  if (Y) *Y = rk->Y;
+  if (ns) *ns = rk->tableau->s;
+  if (Y)   *Y = rk->Y;
   PetscFunctionReturn(0);
 }
 

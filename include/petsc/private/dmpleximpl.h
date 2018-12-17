@@ -6,7 +6,6 @@
 #include <petscbt.h>
 #include <petscsf.h>
 #include <petsc/private/dmimpl.h>
-#include <petsc/private/isimpl.h>     /* for inline access to atlasOff */
 
 PETSC_EXTERN PetscLogEvent DMPLEX_Interpolate;
 PETSC_EXTERN PetscLogEvent DMPLEX_Partition;
@@ -268,6 +267,7 @@ PETSC_INTERN PetscErrorCode CellRefinerInCellTest_Internal(CellRefiner, const Pe
 PETSC_INTERN PetscErrorCode DMPlexInvertCell_Internal(PetscInt, PetscInt, PetscInt[]);
 PETSC_INTERN PetscErrorCode DMPlexVecSetFieldClosure_Internal(DM, PetscSection, Vec, PetscBool[], PetscInt, PetscInt, const PetscInt[], const PetscScalar[], InsertMode);
 PETSC_INTERN PetscErrorCode DMPlexProjectConstraints_Internal(DM, Vec, Vec);
+PETSC_EXTERN PetscErrorCode DMPlexCreateReferenceTree_SetTree(DM, PetscSection, PetscInt[], PetscInt[]);
 PETSC_EXTERN PetscErrorCode DMPlexCreateReferenceTree_Union(DM,DM,const char *,DM*);
 PETSC_EXTERN PetscErrorCode DMPlexComputeInterpolatorTree(DM,DM,PetscSF,PetscInt *,Mat);
 PETSC_EXTERN PetscErrorCode DMPlexComputeInjectorTree(DM,DM,PetscSF,PetscInt *,Mat);
@@ -275,6 +275,8 @@ PETSC_EXTERN PetscErrorCode DMPlexAnchorsModifyMat(DM,PetscSection,PetscInt,Pets
 PETSC_EXTERN PetscErrorCode indicesPoint_private(PetscSection,PetscInt,PetscInt,PetscInt *,PetscBool,PetscInt,PetscInt []);
 PETSC_EXTERN PetscErrorCode indicesPointFields_private(PetscSection,PetscInt,PetscInt,PetscInt [],PetscBool,PetscInt,PetscInt []);
 PETSC_INTERN PetscErrorCode DMPlexLocatePoint_Internal(DM,PetscInt,const PetscScalar [],PetscInt,PetscInt *);
+PETSC_EXTERN PetscErrorCode DMPlexOrientCell_Internal(DM,PetscInt,PetscInt,PetscBool);
+PETSC_EXTERN PetscErrorCode DMPlexOrientInterface(DM);
 
 PETSC_INTERN PetscErrorCode DMPlexCreateCellNumbering_Internal(DM, PetscBool, IS *);
 PETSC_INTERN PetscErrorCode DMPlexCreateVertexNumbering_Internal(DM, PetscBool, IS *);
@@ -378,126 +380,75 @@ PETSC_STATIC_INLINE PetscReal DMPlex_DotRealD_Internal(PetscInt dim, const Petsc
 
 PETSC_STATIC_INLINE PetscReal DMPlex_NormD_Internal(PetscInt dim, const PetscReal *x) {PetscReal sum = 0.0; PetscInt d; for (d = 0; d < dim; ++d) sum += x[d]*x[d]; return PetscSqrtReal(sum);}
 
-PETSC_STATIC_INLINE PetscErrorCode DMPlexGetLocalOffset_Private(DM dm, PetscInt point, PetscInt *start, PetscInt *end)
+/* Compare cones of the master and slave face (with the same cone points modulo order), and return relative orientation of the slave. */
+PETSC_STATIC_INLINE PetscErrorCode DMPlexFixFaceOrientations_Orient_Private(PetscInt coneSize, PetscInt masterConeSize, const PetscInt masterCone[], const PetscInt slaveCone[], PetscInt *start, PetscBool *reverse)
 {
-  PetscFunctionBeginHot;
-#if defined(PETSC_USE_DEBUG)
-  {
-    PetscInt       dof;
-    PetscErrorCode ierr;
-    *start = *end = 0; /* Silence overzealous compiler warning */
-    if (!dm->defaultSection) SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "DM must have a default Section, see DMSetSection()");
-    ierr = PetscSectionGetOffset(dm->defaultSection, point, start);CHKERRQ(ierr);
-    ierr = PetscSectionGetDof(dm->defaultSection, point, &dof);CHKERRQ(ierr);
-    *end = *start + dof;
-  }
-#else
-  {
-    const PetscSection s = dm->defaultSection;
-    *start = s->atlasOff[point - s->pStart];
-    *end   = *start + s->atlasDof[point - s->pStart];
-  }
-#endif
-  PetscFunctionReturn(0);
-}
+  PetscInt        i;
 
-PETSC_STATIC_INLINE PetscErrorCode DMPlexGetLocalFieldOffset_Private(DM dm, PetscInt point, PetscInt field, PetscInt *start, PetscInt *end)
-{
   PetscFunctionBegin;
-#if defined(PETSC_USE_DEBUG)
-  {
-    PetscInt       dof;
-    PetscErrorCode ierr;
-    *start = *end = 0; /* Silence overzealous compiler warning */
-    if (!dm->defaultSection) SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "DM must have a default Section, see DMSetSection()");
-    ierr = PetscSectionGetFieldOffset(dm->defaultSection, point, field, start);CHKERRQ(ierr);
-    ierr = PetscSectionGetFieldDof(dm->defaultSection, point, field, &dof);CHKERRQ(ierr);
-    *end = *start + dof;
-  }
-#else
-  {
-    const PetscSection s = dm->defaultSection->field[field];
-    *start = s->atlasOff[point - s->pStart];
-    *end   = *start + s->atlasDof[point - s->pStart];
-  }
-#endif
-  PetscFunctionReturn(0);
-}
-
-PETSC_STATIC_INLINE PetscErrorCode DMPlexGetGlobalOffset_Private(DM dm, PetscInt point, PetscInt *start, PetscInt *end)
-{
-  PetscFunctionBegin;
-#if defined(PETSC_USE_DEBUG)
-  {
-    PetscErrorCode ierr;
-    PetscInt       dof,cdof;
-    *start = *end = 0; /* Silence overzealous compiler warning */
-    if (!dm->defaultSection) SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "DM must have a default Section, see DMSetSection()");
-    if (!dm->defaultGlobalSection) SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "DM must have a default global Section. It will be created automatically by DMGetGlobalSection()");
-    ierr = PetscSectionGetOffset(dm->defaultGlobalSection, point, start);CHKERRQ(ierr);
-    ierr = PetscSectionGetDof(dm->defaultGlobalSection, point, &dof);CHKERRQ(ierr);
-    ierr = PetscSectionGetConstraintDof(dm->defaultGlobalSection, point, &cdof);CHKERRQ(ierr);
-    *end = *start + dof - cdof + (dof < 0 ? 1 : 0);
-  }
-#else
-  {
-    const PetscSection s    = dm->defaultGlobalSection;
-    const PetscInt     dof  = s->atlasDof[point - s->pStart];
-    const PetscInt     cdof = s->bc ? s->bc->atlasDof[point - s->bc->pStart] : 0;
-    *start = s->atlasOff[point - s->pStart];
-    *end   = *start + dof - cdof + (dof < 0 ? 1 : 0);
-  }
-#endif
-  PetscFunctionReturn(0);
-}
-
-PETSC_STATIC_INLINE PetscErrorCode DMPlexGetGlobalFieldOffset_Private(DM dm, PetscInt point, PetscInt field, PetscInt *start, PetscInt *end)
-{
-  PetscFunctionBegin;
-#if defined(PETSC_USE_DEBUG)
-  {
-    PetscInt       loff, lfoff, fdof, fcdof, ffcdof, f;
-    PetscErrorCode ierr;
-    *start = *end = 0; /* Silence overzealous compiler warning */
-    if (!dm->defaultSection) SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "DM must have a default Section, see DMSetSection()");
-    if (!dm->defaultGlobalSection) SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "DM must have a default global Section. It will be crated automatically by DMGetGlobalSection()");
-    ierr = PetscSectionGetOffset(dm->defaultGlobalSection, point, start);CHKERRQ(ierr);
-    ierr = PetscSectionGetOffset(dm->defaultSection, point, &loff);CHKERRQ(ierr);
-    ierr = PetscSectionGetFieldOffset(dm->defaultSection, point, field, &lfoff);CHKERRQ(ierr);
-    ierr = PetscSectionGetFieldDof(dm->defaultSection, point, field, &fdof);CHKERRQ(ierr);
-    ierr = PetscSectionGetFieldConstraintDof(dm->defaultSection, point, field, &fcdof);CHKERRQ(ierr);
-    *start = *start < 0 ? *start - (lfoff-loff) : *start + lfoff-loff;
-    for (f = 0; f < field; ++f) {
-      ierr = PetscSectionGetFieldConstraintDof(dm->defaultSection, point, f, &ffcdof);CHKERRQ(ierr);
-      *start = *start < 0 ? *start + ffcdof : *start - ffcdof;
+  *start = 0;
+  for (i=0; i<coneSize; i++) {
+    if (slaveCone[i] == masterCone[0]) {
+      *start = i;
+      break;
     }
-    *end   = *start < 0 ? *start - (fdof-fcdof) : *start + fdof-fcdof;
   }
-#else
-  {
-    const PetscSection s     = dm->defaultSection;
-    const PetscSection fs    = dm->defaultSection->field[field];
-    const PetscSection gs    = dm->defaultGlobalSection;
-    const PetscInt     loff  = s->atlasOff[point - s->pStart];
-    const PetscInt     goff  = gs->atlasOff[point - s->pStart];
-    const PetscInt     lfoff = fs->atlasOff[point - s->pStart];
-    const PetscInt     fdof  = fs->atlasDof[point - s->pStart];
-    const PetscInt     fcdof = fs->bc ? fs->bc->atlasDof[point - fs->bc->pStart] : 0;
-    PetscInt           ffcdof = 0, f;
+  if (PetscUnlikely(i==coneSize)) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_ARG_INCOMP, "starting point of master cone not found in slave cone");
+  *reverse = PETSC_FALSE;
+  for (i=0; i<masterConeSize; i++) {if (slaveCone[((*start)+i)%coneSize] != masterCone[i]) break;}
+  if (i == masterConeSize) PetscFunctionReturn(0);
+  *reverse = PETSC_TRUE;
+  for (i=0; i<masterConeSize; i++) {if (slaveCone[(coneSize+(*start)-i)%coneSize] != masterCone[i]) break;}
+  if (i < masterConeSize) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_ARG_INCOMP, "master and slave cone have non-conforming order of points");
+  PetscFunctionReturn(0);
+}
 
-    for (f = 0; f < field; ++f) {
-      const PetscSection ffs = dm->defaultSection->field[f];
-      ffcdof += ffs->bc ? ffs->bc->atlasDof[point - ffs->bc->pStart] : 0;
-    }
-    *start = goff + (goff < 0 ? loff-lfoff + ffcdof : lfoff-loff - ffcdof);
-    *end   = *start < 0 ? *start - (fdof-fcdof) : *start + fdof-fcdof;
+PETSC_STATIC_INLINE PetscErrorCode DMPlexFixFaceOrientations_Translate_Private(PetscInt ornt, PetscInt *start, PetscBool *reverse)
+{
+  PetscFunctionBegin;
+  *reverse = (ornt < 0) ? PETSC_TRUE : PETSC_FALSE;
+  *start = *reverse ? -(ornt+1) : ornt;
+  PetscFunctionReturn(0);
+}
+
+PETSC_STATIC_INLINE PetscErrorCode DMPlexFixFaceOrientations_Combine_Private(PetscInt coneSize, PetscInt origStart, PetscBool origReverse, PetscInt rotateStart, PetscBool rotateReverse, PetscInt *newStart, PetscBool *newReverse)
+{
+  PetscFunctionBegin;
+  *newReverse = (origReverse == rotateReverse) ? PETSC_FALSE : PETSC_TRUE;
+  *newStart = rotateReverse ? (coneSize + rotateStart - origStart) : (coneSize + origStart - rotateStart);
+  *newStart %= coneSize;
+  PetscFunctionReturn(0);
+}
+
+PETSC_STATIC_INLINE PetscErrorCode DMPlexFixFaceOrientations_TranslateBack_Private(PetscInt coneSize, PetscInt start, PetscBool reverse, PetscInt *ornt)
+{
+  PetscFunctionBegin;
+  if (coneSize < 3) {
+    /* edges just get flipped if start == 1 regardless direction */
+    *ornt = start ? -2 : 0;
+  } else {
+    *ornt = reverse ? -(start+1) : start;
   }
-#endif
+  PetscFunctionReturn(0);
+}
+
+PETSC_STATIC_INLINE PetscErrorCode DMPlexFixFaceOrientations_Permute_Private(PetscInt n, const PetscInt arr[], PetscInt start, PetscBool reverse, PetscInt newarr[])
+{
+  PetscInt i;
+
+  PetscFunctionBegin;
+  if (reverse) {for (i=0; i<n; i++) newarr[i] = arr[(n+start-i)%n];}
+  else         {for (i=0; i<n; i++) newarr[i] = arr[(start+i)%n];}
   PetscFunctionReturn(0);
 }
 
 PETSC_INTERN PetscErrorCode DMPlexGetPointDualSpaceFEM(DM,PetscInt,PetscInt,PetscDualSpace *);
 PETSC_INTERN PetscErrorCode DMPlexGetIndicesPoint_Internal(PetscSection,PetscInt,PetscInt,PetscInt *,PetscBool,const PetscInt[],PetscInt[]);
 PETSC_INTERN PetscErrorCode DMPlexGetIndicesPointFields_Internal(PetscSection,PetscInt,PetscInt,PetscInt[],PetscBool,const PetscInt***,PetscInt,PetscInt[]);
+
+PETSC_EXTERN PetscErrorCode DMSNESGetFEGeom(DMField, IS, PetscQuadrature, PetscBool, PetscFEGeom **);
+PETSC_EXTERN PetscErrorCode DMSNESRestoreFEGeom(DMField, IS, PetscQuadrature, PetscBool, PetscFEGeom **);
+PETSC_EXTERN PetscErrorCode DMPlexComputeJacobian_Patch_Internal(DM, PetscSection, PetscSection, IS, PetscReal, PetscReal, Vec, Vec, Mat, Mat, void *);
+PETSC_INTERN PetscErrorCode DMCreateSubDomainDM_Plex(DM,DMLabel,PetscInt,IS*,DM*);
 
 #endif /* _PLEXIMPL_H */

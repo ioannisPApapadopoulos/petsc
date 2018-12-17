@@ -36,6 +36,8 @@ typedef const char* DMType;
 #define DMP4EST     "p4est"
 #define DMP8EST     "p8est"
 #define DMSWARM     "swarm"
+#define DMPRODUCT   "product"
+#define DMSTAG      "stag"
 
 PETSC_EXTERN const char *const DMBoundaryTypes[];
 PETSC_EXTERN PetscFunctionList DMList;
@@ -101,8 +103,10 @@ PETSC_EXTERN PetscErrorCode DMCreateInterpolationScale(DM,DM,Mat,Vec*);
 PETSC_EXTERN PetscErrorCode DMCreateAggregates(DM,DM,Mat*);
 PETSC_EXTERN PetscErrorCode DMGlobalToLocalHookAdd(DM,PetscErrorCode (*)(DM,Vec,InsertMode,Vec,void*),PetscErrorCode (*)(DM,Vec,InsertMode,Vec,void*),void*);
 PETSC_EXTERN PetscErrorCode DMLocalToGlobalHookAdd(DM,PetscErrorCode (*)(DM,Vec,InsertMode,Vec,void*),PetscErrorCode (*)(DM,Vec,InsertMode,Vec,void*),void*);
+PETSC_EXTERN PetscErrorCode DMGlobalToLocal(DM,Vec,InsertMode,Vec);
 PETSC_EXTERN PetscErrorCode DMGlobalToLocalBegin(DM,Vec,InsertMode,Vec);
 PETSC_EXTERN PetscErrorCode DMGlobalToLocalEnd(DM,Vec,InsertMode,Vec);
+PETSC_EXTERN PetscErrorCode DMLocalToGlobal(DM,Vec,InsertMode,Vec);
 PETSC_EXTERN PetscErrorCode DMLocalToGlobalBegin(DM,Vec,InsertMode,Vec);
 PETSC_EXTERN PetscErrorCode DMLocalToGlobalEnd(DM,Vec,InsertMode,Vec);
 PETSC_EXTERN PetscErrorCode DMLocalToLocalBegin(DM,Vec,InsertMode,Vec);
@@ -126,6 +130,9 @@ PETSC_EXTERN PetscErrorCode DMSetCoordinateSection(DM,PetscInt,PetscSection);
 PETSC_EXTERN PetscErrorCode DMGetCoordinates(DM,Vec*);
 PETSC_EXTERN PetscErrorCode DMSetCoordinates(DM,Vec);
 PETSC_EXTERN PetscErrorCode DMGetCoordinatesLocal(DM,Vec*);
+PETSC_EXTERN PetscErrorCode DMGetCoordinatesLocalSetUp(DM);
+PETSC_EXTERN PetscErrorCode DMGetCoordinatesLocalNoncollective(DM,Vec*);
+PETSC_EXTERN PetscErrorCode DMGetCoordinatesLocalTuple(DM,IS,PetscSection*,Vec*);
 PETSC_EXTERN PetscErrorCode DMSetCoordinatesLocal(DM,Vec);
 PETSC_EXTERN PetscErrorCode DMLocatePoints(DM,Vec,DMPointLocationType,PetscSF*);
 PETSC_EXTERN PetscErrorCode DMGetPeriodicity(DM,PetscBool*,const PetscReal**,const PetscReal**,const DMBoundaryType**);
@@ -133,6 +140,7 @@ PETSC_EXTERN PetscErrorCode DMSetPeriodicity(DM,PetscBool,const PetscReal[],cons
 PETSC_EXTERN PetscErrorCode DMLocalizeCoordinate(DM, const PetscScalar[], PetscBool, PetscScalar[]);
 PETSC_EXTERN PetscErrorCode DMLocalizeCoordinates(DM);
 PETSC_EXTERN PetscErrorCode DMGetCoordinatesLocalized(DM,PetscBool*);
+PETSC_EXTERN PetscErrorCode DMGetCoordinatesLocalizedLocal(DM,PetscBool*);
 PETSC_EXTERN PetscErrorCode DMGetNeighbors(DM,PetscInt*,const PetscMPIInt**);
 PETSC_EXTERN PetscErrorCode DMGetCoordinateField(DM,DMField*);
 PETSC_EXTERN PetscErrorCode DMSetCoordinateField(DM,DMField);
@@ -187,6 +195,11 @@ PETSC_EXTERN PetscErrorCode DMPrintCellVector(PetscInt, const char [], PetscInt,
 PETSC_EXTERN PetscErrorCode DMPrintCellMatrix(PetscInt, const char [], PetscInt, PetscInt, const PetscScalar []);
 PETSC_EXTERN PetscErrorCode DMPrintLocalVec(DM, const char [], PetscReal, Vec);
 
+PETSC_EXTERN PetscErrorCode DMSetNullSpaceConstructor(DM, PetscInt, PetscErrorCode (*)(DM, PetscInt, MatNullSpace *));
+PETSC_EXTERN PetscErrorCode DMGetNullSpaceConstructor(DM, PetscInt, PetscErrorCode (**)(DM, PetscInt, MatNullSpace *));
+PETSC_EXTERN PetscErrorCode DMSetNearNullSpaceConstructor(DM, PetscInt, PetscErrorCode (*)(DM, PetscInt, MatNullSpace *));
+PETSC_EXTERN PetscErrorCode DMGetNearNullSpaceConstructor(DM, PetscInt, PetscErrorCode (**)(DM, PetscInt, MatNullSpace *));
+
 PETSC_EXTERN PetscErrorCode DMGetSection(DM, PetscSection *);
 PETSC_EXTERN PetscErrorCode DMSetSection(DM, PetscSection);
 PETSC_EXTERN PetscErrorCode DMGetDefaultConstraints(DM, PetscSection *, Mat *);
@@ -217,6 +230,23 @@ PETSC_EXTERN PetscErrorCode DMSetNumFields(DM, PetscInt);
 PETSC_EXTERN PetscErrorCode DMGetField(DM, PetscInt, PetscObject *);
 PETSC_EXTERN PetscErrorCode DMSetField(DM, PetscInt, PetscObject);
 
+/*MC
+  DMInterpolationInfo - Structure for holding information about interpolation on a mesh
+
+  Level: intermediate
+
+  Synopsis:
+    comm   - The communicator
+    dim    - The spatial dimension of points
+    nInput - The number of input points
+    points - The input point coordinates
+    cells  - The cell containing each point
+    n      - The number of local points
+    coords - The point coordinates
+    dof    - The number of components to interpolate
+
+.seealso: DMInterpolationCreate(), DMInterpolationEvaluate(), DMInterpolationAddPoints()
+M*/
 struct _DMInterpolationInfo {
   MPI_Comm   comm;
   PetscInt   dim;    /*1 The spatial dimension of points */
@@ -279,6 +309,9 @@ PETSC_EXTERN PetscErrorCode DMProjectFieldLabelLocal(DM,PetscReal,DMLabel,PetscI
 PETSC_EXTERN PetscErrorCode DMComputeL2Diff(DM,PetscReal,PetscErrorCode(**)(PetscInt,PetscReal,const PetscReal[],PetscInt,PetscScalar *,void *),void **,Vec,PetscReal *);
 PETSC_EXTERN PetscErrorCode DMComputeL2GradientDiff(DM, PetscReal, PetscErrorCode (**)(PetscInt, PetscReal, const PetscReal [], const PetscReal [], PetscInt, PetscScalar *, void *), void **, Vec, const PetscReal [], PetscReal *);
 PETSC_EXTERN PetscErrorCode DMComputeL2FieldDiff(DM,PetscReal,PetscErrorCode(**)(PetscInt,PetscReal,const PetscReal[],PetscInt,PetscScalar *,void *),void **,Vec,PetscReal *);
+
+PETSC_EXTERN PetscErrorCode DMGetNullSpaceConstructor(DM, PetscInt, PetscErrorCode (**)(DM, PetscInt, MatNullSpace *));
+PETSC_EXTERN PetscErrorCode DMSetNullSpaceConstructor(DM, PetscInt, PetscErrorCode (*)(DM, PetscInt, MatNullSpace *));
 
 PETSC_EXTERN PetscErrorCode DMGetCompatibility(DM,DM,PetscBool*,PetscBool*);
 #endif

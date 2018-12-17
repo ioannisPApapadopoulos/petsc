@@ -480,6 +480,7 @@ PetscErrorCode TSGLEERegister(TSGLEEType name,PetscInt order,PetscInt s, PetscIn
   PetscInt          i,j;
 
   PetscFunctionBegin;
+  ierr     = TSGLEEInitializePackage();CHKERRQ(ierr);
   ierr     = PetscMalloc(sizeof(*link),&link);CHKERRQ(ierr);
   ierr     = PetscMemzero(link,sizeof(*link));CHKERRQ(ierr);
   t        = &link->tab;
@@ -1045,8 +1046,8 @@ static PetscErrorCode  TSGetStages_GLEE(TS ts,PetscInt *ns,Vec **Y)
   TS_GLEE *glee = (TS_GLEE*)ts->data;
 
   PetscFunctionBegin;
-  *ns = glee->tableau->s;
-  if(Y) *Y  = glee->YStage;
+  if (ns) *ns = glee->tableau->s;
+  if (Y)  *Y  = glee->YStage;
   PetscFunctionReturn(0);
 }
 

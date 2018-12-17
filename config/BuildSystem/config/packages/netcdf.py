@@ -16,15 +16,16 @@ class Configure(config.package.GNUPackage):
     self.mpi     = framework.require('config.packages.MPI', self)
     self.pnetcdf = framework.require('config.packages.pnetcdf', self)
     self.hdf5    = framework.require('config.packages.hdf5', self)
-    self.deps    = [self.mpi, self.hdf5]
+    self.zlib    = framework.require('config.packages.zlib',self)
+    self.deps    = [self.mpi, self.hdf5,self.zlib]
     self.odeps   = [self.pnetcdf]
     return
 
   def formGNUConfigureArgs(self):
     ''' disable DAP and HDF4, enable NetCDF4'''
     args = config.package.GNUPackage.formGNUConfigureArgs(self)
-    args.append('CPPFLAGS="'+self.headers.toString(self.hdf5.include)+'"')
-    args.append('LIBS="'+self.libraries.toString(self.hdf5.dlib)+' '+self.compilers.LIBS+'"')
+    args.append('CPPFLAGS="'+self.headers.toString(self.dinclude)+'"')
+    args.append('LIBS="'+self.libraries.toString(self.dlib)+' '+self.compilers.LIBS+'"')
     args.append('--enable-netcdf-4')
     if self.pnetcdf.found:
       args.append('--enable-pnetcdf')

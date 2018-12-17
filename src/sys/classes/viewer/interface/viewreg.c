@@ -216,7 +216,7 @@ $       saws[:communicatorname]                    publishes object to the Scien
           PetscOptionsFList(), PetscOptionsEList(), PetscOptionsPushGetViewerOff(), PetscOptionsPopGetViewerOff(),
           PetscOptionsGetViewerOff()
 @*/
-PetscErrorCode  PetscOptionsGetViewer(MPI_Comm comm,const char pre[],const char name[],PetscViewer *viewer,PetscViewerFormat *format,PetscBool  *set)
+PetscErrorCode  PetscOptionsGetViewer(MPI_Comm comm,PetscOptions options,const char pre[],const char name[],PetscViewer *viewer,PetscViewerFormat *format,PetscBool  *set)
 {
   const char                     *value;
   PetscErrorCode                 ierr;
@@ -253,7 +253,7 @@ PetscErrorCode  PetscOptionsGetViewer(MPI_Comm comm,const char pre[],const char 
   }
 
   if (format) *format = PETSC_VIEWER_DEFAULT;
-  ierr = PetscOptionsFindPair(NULL,pre,name,&value,&flag);CHKERRQ(ierr);
+  ierr = PetscOptionsFindPair(options,pre,name,&value,&flag);CHKERRQ(ierr);
   if (flag) {
     if (set) *set = PETSC_TRUE;
     if (!value) {
@@ -344,6 +344,7 @@ PetscErrorCode  PetscOptionsGetViewer(MPI_Comm comm,const char pre[],const char 
             if (*loc1_fname) {
               ierr = PetscViewerDrawSetDrawType(*viewer,loc1_fname);CHKERRQ(ierr);
             }
+            ierr = PetscViewerSetFromOptions(*viewer);CHKERRQ(ierr);
           }
         }
       }
@@ -409,7 +410,7 @@ PetscErrorCode  PetscViewerCreate(MPI_Comm comm,PetscViewer *inviewer)
 -  type        - for example, PETSCVIEWERASCII
 
    Options Database Command:
-.  -draw_type  <type> - Sets the type; use -help for a list
+.  -viewer_type  <type> - Sets the type; use -help for a list
     of available methods (for instance, ascii)
 
    Level: advanced
@@ -480,6 +481,7 @@ PetscErrorCode  PetscViewerRegister(const char *sname,PetscErrorCode (*function)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  ierr = PetscViewerInitializePackage();CHKERRQ(ierr);
   ierr = PetscFunctionListAdd(&PetscViewerList,sname,function);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

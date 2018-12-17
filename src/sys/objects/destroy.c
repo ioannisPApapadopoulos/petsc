@@ -130,7 +130,7 @@ PetscErrorCode PetscObjectViewFromOptions(PetscObject obj,PetscObject bobj,const
   if (incall) PetscFunctionReturn(0);
   incall = PETSC_TRUE;
   prefix = bobj ? bobj->prefix : obj->prefix;
-  ierr   = PetscOptionsGetViewer(PetscObjectComm((PetscObject)obj),prefix,optionname,&viewer,&format,&flg);CHKERRQI(incall,ierr);
+  ierr   = PetscOptionsGetViewer(PetscObjectComm((PetscObject)obj),obj->options,prefix,optionname,&viewer,&format,&flg);CHKERRQI(incall,ierr);
   if (flg) {
     ierr = PetscViewerPushFormat(viewer,format);CHKERRQI(incall,ierr);
     ierr = PetscObjectView(obj,viewer);CHKERRQI(incall,ierr);
@@ -157,7 +157,7 @@ PetscErrorCode PetscObjectViewFromOptions(PetscObject obj,PetscObject bobj,const
 
    Level: intermediate
 
-.seealso: VecGetType(), KSPGetType(), PCGetType(), SNESGetType(), PetscObjectBaseTypeCompare()
+.seealso: VecGetType(), KSPGetType(), PCGetType(), SNESGetType(), PetscObjectBaseTypeCompare(), PetscObjectTypeCompareAny()
 
    Concepts: comparing^object types
    Concepts: types^comparing
@@ -195,8 +195,7 @@ PetscErrorCode  PetscObjectTypeCompare(PetscObject obj,const char type_name[],Pe
 
    Level: intermediate
 
-.seealso: PetscObjectTypeCompare()
-
+.seealso: PetscObjectTypeCompare(), PetscObjectTypeCompareAny()
 
 @*/
 PetscErrorCode  PetscObjectBaseTypeCompare(PetscObject obj,const char type_name[],PetscBool  *same)
@@ -231,7 +230,7 @@ PetscErrorCode  PetscObjectBaseTypeCompare(PetscObject obj,const char type_name[
 
    Level: intermediate
 
-.seealso: VecGetType(), KSPGetType(), PCGetType(), SNESGetType(), PetscObjectTypeCompare()
+.seealso: VecGetType(), KSPGetType(), PCGetType(), SNESGetType(), PetscObjectTypeCompare(), PetscObjectBaseTypeCompare()
 
    Concepts: comparing^object types
    Concepts: types^comparing

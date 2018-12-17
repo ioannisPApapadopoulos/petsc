@@ -1,6 +1,7 @@
 static char help[] = "Partition a mesh in parallel, perhaps with overlap\n\n";
 
 #include <petscdmplex.h>
+#include <petscsf.h>
 
 enum {STAGE_LOAD, STAGE_DISTRIBUTE, STAGE_REFINE, STAGE_REDISTRIBUTE};
 
@@ -77,6 +78,7 @@ PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
   ierr = PetscLogStagePush(user->stages[STAGE_LOAD]);CHKERRQ(ierr);
   if (len) {ierr = DMPlexCreateFromFile(comm, filename, PETSC_TRUE, dm);CHKERRQ(ierr);}
   else     {ierr = DMPlexCreateBoxMesh(comm, dim, cellSimplex, NULL, NULL, NULL, NULL, PETSC_TRUE, dm);CHKERRQ(ierr);}
+  ierr = DMViewFromOptions(*dm, NULL, "-orig_dm_view");CHKERRQ(ierr);
   ierr = DMPlexSetPartitionBalance(*dm, user->partitionBalance);CHKERRQ(ierr);
   ierr = PetscLogStagePop();CHKERRQ(ierr);
   ierr = PetscLogStagePush(user->stages[STAGE_DISTRIBUTE]);CHKERRQ(ierr);
@@ -105,7 +107,19 @@ PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
     }
     ierr = DMPlexDistribute(*dm, overlap, NULL, &distMesh);CHKERRQ(ierr);
   } else {
-    ierr = DMPlexGetRedundantDM(*dm, &distMesh);CHKERRQ(ierr);
+    PetscSF sf;
+
+    ierr = DMPlexGetRedundantDM(*dm, &sf, &distMesh);CHKERRQ(ierr);
+    if (sf) {
+      DM test;
+
+      ierr = DMPlexCreate(comm,&test);CHKERRQ(ierr);
+      ierr = PetscObjectSetName((PetscObject)test, "Test SF-migrated Redundant Mesh");CHKERRQ(ierr);
+      ierr = DMPlexMigrate(*dm, sf, test);CHKERRQ(ierr);
+      ierr = DMViewFromOptions(test, NULL, "-redundant_migrated_dm_view");CHKERRQ(ierr);
+      ierr = DMDestroy(&test);CHKERRQ(ierr);
+    }
+    ierr = PetscSFDestroy(&sf);CHKERRQ(ierr);
   }
   if (distMesh) {
     ierr = DMDestroy(dm);CHKERRQ(ierr);
@@ -113,6 +127,7 @@ PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
   }
   ierr = PetscLogStagePop();CHKERRQ(ierr);
   if (user->loadBalance) {
+    ierr = DMViewFromOptions(*dm, NULL, "-prelb_dm_view");CHKERRQ(ierr);
     ierr = DMPlexSetOptionsPrefix(*dm, "lb_");CHKERRQ(ierr);
     ierr = PetscLogStagePush(user->stages[STAGE_REDISTRIBUTE]);CHKERRQ(ierr);
     if (user->testPartition) {
@@ -204,7 +219,7 @@ int main(int argc, char **argv)
     suffix: 8
     requires: triangle
     nsize: 2
-    args: -test_redundant -dm_view ascii::ascii_info_detail
+    args: -test_redundant -redundant_migrated_dm_view ascii::ascii_info_detail -dm_view ascii::ascii_info_detail
 
   # Same tests as above, but with balancing of the shared point partition
   test:

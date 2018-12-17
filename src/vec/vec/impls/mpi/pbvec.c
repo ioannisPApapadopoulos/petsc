@@ -2,7 +2,7 @@
 /*
    This file contains routines for Parallel vector operations.
  */
-#include <petscoptions.h>
+#include <petscsys.h>
 #include <../src/vec/vec/impls/mpi/pvecimpl.h>   /*I  "petscvec.h"   I*/
 
 PetscErrorCode VecDot_MPI(Vec xin,Vec yin,PetscScalar *z)
@@ -682,7 +682,7 @@ PetscErrorCode  VecCreateGhostWithArray(MPI_Comm comm,PetscInt n,PetscInt N,Pets
   */
   ierr = ISCreateGeneral(comm,nghost,ghosts,PETSC_COPY_VALUES,&from);CHKERRQ(ierr);
   ierr = ISCreateStride(PETSC_COMM_SELF,nghost,n,1,&to);CHKERRQ(ierr);
-  ierr = VecScatterCreate(*vv,from,w->localrep,to,&w->localupdate);CHKERRQ(ierr);
+  ierr = VecScatterCreateWithData(*vv,from,w->localrep,to,&w->localupdate);CHKERRQ(ierr);
   ierr = PetscLogObjectParent((PetscObject)*vv,(PetscObject)w->localupdate);CHKERRQ(ierr);
   ierr = ISDestroy(&to);CHKERRQ(ierr);
   ierr = ISDestroy(&from);CHKERRQ(ierr);
@@ -806,7 +806,7 @@ PetscErrorCode  VecMPISetGhost(Vec vv,PetscInt nghost,const PetscInt ghosts[])
      */
     ierr = ISCreateGeneral(comm,nghost,ghosts,PETSC_COPY_VALUES,&from);CHKERRQ(ierr);
     ierr = ISCreateStride(PETSC_COMM_SELF,nghost,n,1,&to);CHKERRQ(ierr);
-    ierr = VecScatterCreate(vv,from,w->localrep,to,&w->localupdate);CHKERRQ(ierr);
+    ierr = VecScatterCreateWithData(vv,from,w->localrep,to,&w->localupdate);CHKERRQ(ierr);
     ierr = PetscLogObjectParent((PetscObject)vv,(PetscObject)w->localupdate);CHKERRQ(ierr);
     ierr = ISDestroy(&to);CHKERRQ(ierr);
     ierr = ISDestroy(&from);CHKERRQ(ierr);
@@ -898,7 +898,7 @@ PetscErrorCode  VecCreateGhostBlockWithArray(MPI_Comm comm,PetscInt bs,PetscInt 
   */
   ierr = ISCreateBlock(comm,bs,nghost,ghosts,PETSC_COPY_VALUES,&from);CHKERRQ(ierr);
   ierr = ISCreateStride(PETSC_COMM_SELF,bs*nghost,n,1,&to);CHKERRQ(ierr);
-  ierr = VecScatterCreate(*vv,from,w->localrep,to,&w->localupdate);CHKERRQ(ierr);
+  ierr = VecScatterCreateWithData(*vv,from,w->localrep,to,&w->localupdate);CHKERRQ(ierr);
   ierr = PetscLogObjectParent((PetscObject)*vv,(PetscObject)w->localupdate);CHKERRQ(ierr);
   ierr = ISDestroy(&to);CHKERRQ(ierr);
   ierr = ISDestroy(&from);CHKERRQ(ierr);
