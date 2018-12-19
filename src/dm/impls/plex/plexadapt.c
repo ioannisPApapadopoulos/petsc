@@ -487,6 +487,108 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
   ierr = VecGetArrayRead(vertexMetric, &met);CHKERRQ(ierr);
   for (v = 0; v < (vEnd-vStart)*PetscSqr(dim); ++v) metric[v] = PetscRealPart(met[v]);
   ierr = VecRestoreArrayRead(vertexMetric, &met);CHKERRQ(ierr);
+/******************/
+  // Fix the metric on some boundaries
+  {
+    PetscInt   fStart, fEnd, f, eStart, eEnd, e;
+    PetscReal *edgeLengths;
+
+    ierr = DMPlexGetHeightStratum(dm, 1, &fStart, &fEnd);CHKERRQ(ierr);
+    ierr = DMPlexGetDepthStratum(dm, 1, &eStart, &eEnd);CHKERRQ(ierr);
+    ierr = PetscCalloc1(fEnd-fStart, &edgeLengths);CHKERRQ(ierr);
+    for (f = fStart; f < fEnd; ++f) {
+      const PetscInt *support;
+      const PetscInt *cone;
+      PetscInt       *closure = NULL;
+      PetscInt        supportSize, clSize, cl, valA, valB, val;
+      PetscBool       isBoundary = PETSC_FALSE;
+      PetscReal       m[9] = {0.};
+
+      ierr = DMPlexGetSupportSize(dm, f, &supportSize);CHKERRQ(ierr);
+      ierr = DMPlexGetSupport(dm, f, &support);CHKERRQ(ierr);
+      if (supportSize < 2) {
+        isBoundary = PETSC_TRUE;
+      }
+      else {
+        ierr = DMLabelGetValue(rgLabel, support[0], &valA);CHKERRQ(ierr);
+        ierr = DMLabelGetValue(rgLabel, support[1], &valB);CHKERRQ(ierr);
+        if (valA == valB) { isBoundary = PETSC_TRUE;}
+      }
+      if (!isBoundary) {continue;}
+
+//      ierr = DMLabelGetValue(bdLabel, f, &val);CHKERRQ(ierr);
+//      if (val != 1) { continue;}
+
+      if (dim == 2) {
+        PetscReal  xe[2], ye[2], len;
+        PetscInt   v, i;
+
+        ierr = DMPlexGetCone(dm, f, &cone);CHKERRQ(ierr);
+        for (i = 0; i<2; ++i) {
+          v = cone[i] - vStart;
+          xe[i] = x[v];
+          ye[i] = y[v];
+        }
+        len = PetscSqr(xe[0] - xe[1]) + PetscSqr(ye[0] - ye[1]);
+        len = PetscSqrtReal(len);
+        edgeLengths[f-fStart] = len;
+      }
+      else {
+        // Not yet implemented, needs an extra loop
+      }
+
+      ierr = DMPlexGetTransitiveClosure(dm, f, PETSC_TRUE, &clSize, &closure);CHKERRQ(ierr);
+      for (cl = 0; cl < clSize*2; cl += 2) {
+        if ((closure[cl] < vStart) || (closure[cl] >= vEnd)) continue;
+        
+        const PetscInt v = closure[cl] - vStart;
+        const PetscInt *support;
+        PetscInt        supportSize, s;
+        PetscReal       meanLen, len, count = 0;
+        PetscInt nm = dim == 2 ? 3 : 6;
+        PetscReal met1[nm], met2[nm], metInt[nm];
+
+        // 1- compute max boundary edge size around this element
+        ierr = DMPlexGetSupport(dm, v+vStart, &support);CHKERRQ(ierr);
+        ierr = DMPlexGetSupportSize(dm, v+vStart, &supportSize);CHKERRQ(ierr);
+        meanLen = 0;
+        for (s = 0; s < supportSize; ++s) {
+          e = support[s] - eStart;
+          len = edgeLengths[e-fStart];
+          meanLen += len;  // NB non boundary edges should have a length of 0
+          if (len > 1.e-12) count++;
+        }
+        meanLen /= count;
+        for (int i=0; i<dim; ++i) {m[i*i] = 1/(meanLen*meanLen);} // set diagonal
+
+        if (dim == 2) {
+          met1[0] = metric[v*PetscSqr(dim)+0];
+          met1[1] = metric[v*PetscSqr(dim)+1];
+          met1[2] = metric[v*PetscSqr(dim)+3];
+          met2[0] = m[0];
+          met2[1] = m[1];
+          met2[2] = m[3];
+          metricIntersection(met1, met2, metInt);
+          m[0] = metInt[0]; 
+          m[1] = m[2] = metInt[1];
+          m[3] = metInt[2];
+          printf("DEBUG  v: %d m: %.12e %.12e %.12e %.12e\n", v, m[0], m[1], m[2], m[3]);
+        } 
+        else {
+          // not impletemented yet
+        }
+
+        // 2- update metric
+        if (v*PetscSqr(dim)+PetscSqr(dim)-1 > numVertices*PetscSqr(dim))  printf("DEBUG   ERROR HERE, v: %d, numVertices: %d\n", v, numVertices);
+        if (v<0) printf("DEBUG   ERROR THERE\n");
+        for (int i = 0; i < PetscSqr(dim); ++i) metric[v*PetscSqr(dim)+i] = m[i];
+        
+
+      }
+      ierr = DMPlexRestoreTransitiveClosure(dm, f, PETSC_TRUE, &clSize, &closure);CHKERRQ(ierr);
+    }
+  }
+/******************/
 #if 0
   /* Destroy overlap mesh */
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
