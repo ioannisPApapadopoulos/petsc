@@ -283,7 +283,9 @@ PETSC_INTERN PetscErrorCode DMPlexCreateVertexNumbering_Internal(DM, PetscBool, 
 PETSC_INTERN PetscErrorCode DMPlexRefine_Internal(DM, DMLabel, DM *);
 PETSC_INTERN PetscErrorCode DMPlexCoarsen_Internal(DM, DMLabel, DM *);
 
+PETSC_INTERN PetscErrorCode metricIntersection(double*, double*, double*);
 PETSC_INTERN PetscErrorCode DMPlexMetricGradation2d_Internal(DM, PetscReal *, PetscReal *, PetscReal *);
+PETSC_INTERN PetscErrorCode metricIntersection3D(double*, double*, double*);
 PETSC_INTERN PetscErrorCode DMPlexMetricGradation3d_Internal(DM, PetscReal *, PetscReal *, PetscReal *, PetscReal *);
 
 /* invert dihedral symmetry: return a^-1,

@@ -507,17 +507,17 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
       ierr = DMPlexGetSupportSize(dm, f, &supportSize);CHKERRQ(ierr);
       ierr = DMPlexGetSupport(dm, f, &support);CHKERRQ(ierr);
       if (supportSize < 2) {
+        ierr = DMLabelGetValue(bdLabel, f, &val);CHKERRQ(ierr);
+        //printf("DEBUG  label value: %d\n", val);
+        if (val != 2) { continue;}
         isBoundary = PETSC_TRUE;
       }
       else {
         ierr = DMLabelGetValue(rgLabel, support[0], &valA);CHKERRQ(ierr);
         ierr = DMLabelGetValue(rgLabel, support[1], &valB);CHKERRQ(ierr);
-        if (valA == valB) { isBoundary = PETSC_TRUE;}
+        if (valA != valB) { isBoundary = PETSC_TRUE;}
       }
       if (!isBoundary) {continue;}
-
-//      ierr = DMLabelGetValue(bdLabel, f, &val);CHKERRQ(ierr);
-//      if (val != 1) { continue;}
 
       if (dim == 2) {
         PetscReal  xe[2], ye[2], len;
@@ -541,25 +541,25 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
       for (cl = 0; cl < clSize*2; cl += 2) {
         if ((closure[cl] < vStart) || (closure[cl] >= vEnd)) continue;
         
-        const PetscInt v = closure[cl] - vStart;
+        const PetscInt  v = closure[cl] - vStart;
         const PetscInt *support;
         PetscInt        supportSize, s;
-        PetscReal       meanLen, len, count = 0;
-        PetscInt nm = dim == 2 ? 3 : 6;
-        PetscReal met1[nm], met2[nm], metInt[nm];
+        PetscReal       meanLen, len;
+        PetscInt        nm = dim == 2 ? 3 : 6, count = 0;
+        PetscReal       met1[nm], met2[nm], metInt[nm];
 
-        // 1- compute max boundary edge size around this element
+        // 1- compute max boundary edge size around this facet
         ierr = DMPlexGetSupport(dm, v+vStart, &support);CHKERRQ(ierr);
         ierr = DMPlexGetSupportSize(dm, v+vStart, &supportSize);CHKERRQ(ierr);
         meanLen = 0;
         for (s = 0; s < supportSize; ++s) {
           e = support[s] - eStart;
-          len = edgeLengths[e-fStart];
+          len = edgeLengths[e];
           meanLen += len;  // NB non boundary edges should have a length of 0
           if (len > 1.e-12) count++;
         }
         meanLen /= count;
-        for (int i=0; i<dim; ++i) {m[i*i] = 1/(meanLen*meanLen);} // set diagonal
+        for (int i=0; i<dim; ++i) {m[i*(dim+1)] = 1/(meanLen*meanLen);} // set diagonal
 
         if (dim == 2) {
           met1[0] = metric[v*PetscSqr(dim)+0];
@@ -572,15 +572,12 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
           m[0] = metInt[0]; 
           m[1] = m[2] = metInt[1];
           m[3] = metInt[2];
-          printf("DEBUG  v: %d m: %.12e %.12e %.12e %.12e\n", v, m[0], m[1], m[2], m[3]);
         } 
         else {
           // not impletemented yet
         }
 
         // 2- update metric
-        if (v*PetscSqr(dim)+PetscSqr(dim)-1 > numVertices*PetscSqr(dim))  printf("DEBUG   ERROR HERE, v: %d, numVertices: %d\n", v, numVertices);
-        if (v<0) printf("DEBUG   ERROR THERE\n");
         for (int i = 0; i < PetscSqr(dim); ++i) metric[v*PetscSqr(dim)+i] = m[i];
         
 
