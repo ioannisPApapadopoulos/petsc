@@ -179,6 +179,12 @@ static PetscErrorCode ComputeMetric(DM dm, AppCtx *user, Vec *metric)
       lambda[1] = lmax;
       lambda[2] = lmax;
       break;
+    case 3:
+      h = user->hmin;
+      if (pcoords[0] < 0.5) {h=user->hmax;}
+      lbd = 1/(h*h);
+      lambda[0] = lambda[1] = lambda[2] = lbd;
+      break;
     default:
       SETERRQ1(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "metOpt = 0, 1 or 2, cannot be %d", user->metOpt);
     }
@@ -370,6 +376,10 @@ int main (int argc, char * argv[]) {
     requires: pragmatic
     nsize: 5
     args: -dim 2 -nbrVerEdge 20 -dm_plex_separate_marker 0 -met 2 -hmax 0.5 -hmin 0.001 -init_dm_view -adapt_dm_view
+  test:
+    suffix: grad_0
+    nsize: 1
+    args: -dim 2 -nbrVerEdge 5 -met 3 -hmin=0.003 -hmax=0.1 -dm_plex_separate_marker 1 -bdLabel marker -init_dm_view -adapt_dm_view 
   test:
     suffix: proj_0
     requires: pragmatic
