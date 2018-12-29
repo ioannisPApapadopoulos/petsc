@@ -490,9 +490,45 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
 /******************/
   // Fix the metric on some boundaries
   {
-    PetscInt   fStart, fEnd, f, eStart, eEnd, e;
-    PetscReal *edgeLengths;
+    IS              bdIS;
+    PetscInt        fStart, fEnd, f, eStart, eEnd, e, numBds, maxBds;
+    PetscInt        nbBdyLabels = 256, nbBdySizes = 256, bdyLabels[256];
+    const PetscInt *bds;
+    PetscReal      *edgeLengths, bdySizes[256];
+    PetscBool       flg = PETSC_FALSE, flg2 = PETSC_FALSE;
+    
+    ierr = PetscOptionsGetIntArray(((PetscObject) dm)->options,((PetscObject) dm)->prefix, "-dm_plex_prescribed_boundary_labels", bdyLabels, &nbBdyLabels, &flg);CHKERRQ(ierr);
+    ierr = PetscOptionsGetRealArray(((PetscObject) dm)->options,((PetscObject) dm)->prefix, "-dm_plex_prescribed_boundary_sizes", bdySizes, &nbBdySizes, &flg2);CHKERRQ(ierr);
 
+    if (flg != flg2 || nbBdyLabels != nbBdySizes){
+      printf("DEBUG  flg: %d  flag2: %d \t nbdylabels: %d nbdysizes: %d\n", flg, flg2, nbBdyLabels, nbBdySizes);
+      SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP, "-dm_plex_prescribed_boundary_labels and -dm_plex_prescribed_boundary_sizes must be set together and have the same number of items\n");
+    }
+    
+    if (!bdLabel) {
+      SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP, "-dm_plex_prescribed_boundary_labels and -dm_plex_prescribed_boundary_sizes cannot be used without prescribing a boundary label DMLabel\n");
+    }
+    
+    ierr = DMLabelGetValueIS(bdLabel, &bdIS);CHKERRQ(ierr);
+    ierr = ISGetLocalSize(bdIS, &numBds);CHKERRQ(ierr);
+    ierr = ISGetIndices(bdIS, &bds);CHKERRQ(ierr);
+    maxBds = 0;
+    for (int i=0; i<numBds; ++i){
+      maxBds = PetscMax(maxBds, bds[i]);
+    }
+    ierr = ISRestoreIndices(bdIS, &bds);CHKERRQ(ierr);
+    ierr = ISDestroy(&bdIS);CHKERRQ(ierr);
+
+    // In the following code, max+1 labels the internal boudaries, like in Pragmatic
+    PetscReal prescribedBdSizes[maxBds+1];  
+    for (int i=0; i<maxBds+1; ++i) {prescribedBdSizes[i] = -1.;}
+    for (int i=0; i<nbBdyLabels; ++i) {
+      const PetscInt  label = bdyLabels[i];
+      const PetscReal size = bdySizes[i];
+      
+      prescribedBdSizes[label] = size;
+    }
+    
     ierr = DMPlexGetHeightStratum(dm, 1, &fStart, &fEnd);CHKERRQ(ierr);
     ierr = DMPlexGetDepthStratum(dm, 1, &eStart, &eEnd);CHKERRQ(ierr);
     ierr = PetscCalloc1(fEnd-fStart, &edgeLengths);CHKERRQ(ierr);
@@ -502,20 +538,25 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
       PetscInt       *closure = NULL;
       PetscInt        supportSize, clSize, cl, valA, valB, val;
       PetscBool       isBoundary = PETSC_FALSE;
-      PetscReal       m[9] = {0.};
+      PetscReal       h, m[9] = {0.};
 
       ierr = DMPlexGetSupportSize(dm, f, &supportSize);CHKERRQ(ierr);
       ierr = DMPlexGetSupport(dm, f, &support);CHKERRQ(ierr);
       if (supportSize < 2) {
         ierr = DMLabelGetValue(bdLabel, f, &val);CHKERRQ(ierr);
-        //printf("DEBUG  label value: %d\n", val);
-        if (val != 2) { continue;}
+        //if (val != 2) { continue;}
+        if (prescribedBdSizes[val] < 0) { continue;}
         isBoundary = PETSC_TRUE;
+        h = prescribedBdSizes[val];
       }
       else {
         ierr = DMLabelGetValue(rgLabel, support[0], &valA);CHKERRQ(ierr);
         ierr = DMLabelGetValue(rgLabel, support[1], &valB);CHKERRQ(ierr);
-        if (valA != valB) { isBoundary = PETSC_TRUE;}
+        if (valA != valB) { 
+          if (prescribedBdSizes[maxBds] < 0) { continue;}
+          isBoundary = PETSC_TRUE;
+          h = prescribedBdSizes[maxBds];
+        }
       }
       if (!isBoundary) {continue;}
 
@@ -560,6 +601,8 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
         }
         meanLen /= count;
         for (int i=0; i<dim; ++i) {m[i*(dim+1)] = 1/(meanLen*meanLen);} // set diagonal
+        for (int i=0; i<dim; ++i) {m[i*(dim+1)] = 1/(h*h);} // set diagonal
+        
 
         if (dim == 2) {
           met1[0] = metric[v*PetscSqr(dim)+0];
