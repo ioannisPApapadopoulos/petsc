@@ -520,11 +520,12 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
     ierr = ISDestroy(&bdIS);CHKERRQ(ierr);
 
     // In the following code, max+1 labels the internal boudaries, like in Pragmatic
-    PetscReal prescribedBdSizes[maxBds+1];  
-    for (int i=0; i<maxBds+1; ++i) {prescribedBdSizes[i] = -1.;}
+    PetscReal prescribedBdSizes[maxBds+2];  
+    for (int i=0; i<maxBds+2; ++i) {prescribedBdSizes[i] = -1.;}
     for (int i=0; i<nbBdyLabels; ++i) {
       const PetscInt  label = bdyLabels[i];
       const PetscReal size = bdySizes[i];
+      printf("DEBUG  prescribedBdSizes[%d/%d] = %.2e\n", label, maxBds, size);
       
       prescribedBdSizes[label] = size;
     }
@@ -550,13 +551,16 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
         h = prescribedBdSizes[val];
       }
       else {
-        ierr = DMLabelGetValue(rgLabel, support[0], &valA);CHKERRQ(ierr);
-        ierr = DMLabelGetValue(rgLabel, support[1], &valB);CHKERRQ(ierr);
-        if (valA != valB) { 
-          if (prescribedBdSizes[maxBds] < 0) { continue;}
-          isBoundary = PETSC_TRUE;
-          h = prescribedBdSizes[maxBds];
+        if (rgLabel) {
+          ierr = DMLabelGetValue(rgLabel, support[0], &valA);CHKERRQ(ierr);
+          ierr = DMLabelGetValue(rgLabel, support[1], &valB);CHKERRQ(ierr);
+          if (valA != valB) { 
+            if (prescribedBdSizes[maxBds+1] < 0) { continue;}
+            isBoundary = PETSC_TRUE;
+            h = prescribedBdSizes[maxBds+1];
+          }
         }
+        else {continue;}
       }
       if (!isBoundary) {continue;}
 
@@ -602,6 +606,7 @@ PetscErrorCode DMAdaptMetric_Plex(DM dm, Vec vertexMetric, DMLabel bdLabel, DMLa
         meanLen /= count;
         for (int i=0; i<dim; ++i) {m[i*(dim+1)] = 1/(meanLen*meanLen);} // set diagonal
         for (int i=0; i<dim; ++i) {m[i*(dim+1)] = 1/(h*h);} // set diagonal
+        printf("DEBUG  HERE WE UPDATED m\n");
         
 
         if (dim == 2) {
