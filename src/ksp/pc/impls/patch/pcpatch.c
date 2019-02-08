@@ -2227,7 +2227,7 @@ static PetscErrorCode PCPatchPrecomputePatchTensors_Private(PC pc)
   ierr = ISCreateStride(PETSC_COMM_SELF, ndof*ncell, 0, 1, &dofMap);CHKERRQ(ierr);
   ierr = ISGetIndices(dofMap, &dofMapArray);CHKERRQ(ierr);
   ierr = ISGetIndices(patch->allCells, &cellsArray);CHKERRQ(ierr);
-  ierr = ISCreateGeneral(PETSC_COMM_SELF, ncell, cellsArray, PETSC_USE_POINTER, &cellIS);CHKERRQ(ierr);
+  ierr = ISCreateStride(PETSC_COMM_SELF, ncell, 0, 1, &cellIS);CHKERRQ(ierr);
   PetscStackPush("PCPatch user callback");
   /* TODO: Fix for DMPlex compute op, this bypasses a lot of the machinery and just assembles every element tensor. */
   ierr = patch->usercomputeop(pc, -1, NULL, vecMat, cellIS, ndof*ncell, dofMapArray, NULL, patch->usercomputeopctx);CHKERRQ(ierr);
