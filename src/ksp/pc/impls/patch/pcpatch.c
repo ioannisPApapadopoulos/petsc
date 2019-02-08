@@ -2143,7 +2143,7 @@ static PetscErrorCode MatSetValues_PCPatch_Private(Mat mat, PetscInt m, const Pe
 {
   Vec data;
   PetscScalar *array;
-  PetscInt bs, nz, i, j;
+  PetscInt bs, nz, i, j, cell;
   PetscErrorCode ierr;
 
   ierr = MatShellGetContext(mat, &data);CHKERRQ(ierr);
@@ -2151,16 +2151,17 @@ static PetscErrorCode MatSetValues_PCPatch_Private(Mat mat, PetscInt m, const Pe
   ierr = VecGetSize(data, &nz);CHKERRQ(ierr);
   ierr = VecGetArray(data, &array);CHKERRQ(ierr);
   if (m != n) SETERRQ(PetscObjectComm((PetscObject)mat), PETSC_ERR_ARG_WRONG, "Only for square insertion");
+  cell = (PetscInt)(idxm[0]/bs); // use the fact that this is called once per cell
   for (i = 0; i < m; i++) {
-    const PetscInt row = idxm[i];
+    //const PetscInt row = idxm[i];
     if (idxm[i] != idxn[i]) SETERRQ(PetscObjectComm((PetscObject)mat), PETSC_ERR_ARG_WRONG, "Row and column indices must match!");
     for (j = 0; j < n; j++) {
       const PetscScalar v_ = v[i*bs + j];
       /* Indexing is special to the data structure we have! */
       if (addv == INSERT_VALUES) {
-        array[row*bs + j] = v_;
+        array[cell*bs*bs + i*bs + j] = v_;
       } else {
-        array[row*bs + j] += v_;
+        array[cell*bs*bs + i*bs + j] += v_;
       }
     }
   }
@@ -2232,7 +2233,7 @@ static PetscErrorCode PCPatchPrecomputePatchTensors_Private(PC pc)
   ierr = patch->usercomputeop(pc, -1, NULL, vecMat, cellIS, ndof*ncell, dofMapArray, NULL, patch->usercomputeopctx);CHKERRQ(ierr);
   ierr = ISDestroy(&cellIS);CHKERRQ(ierr);
   ierr = MatDestroy(&vecMat);CHKERRQ(ierr);
-  ierr = VecView(patch->cellMats, 0);CHKERRQ(ierr);
+  /*ierr = VecView(patch->cellMats, 0);CHKERRQ(ierr);*/
   ierr = ISRestoreIndices(patch->allCells, &cellsArray);CHKERRQ(ierr);
   ierr = ISRestoreIndices(dofMap, &dofMapArray);CHKERRQ(ierr);
   ierr = ISDestroy(&dofMap);CHKERRQ(ierr);
@@ -2316,10 +2317,14 @@ static PetscErrorCode PCSetUp_PATCH_Linear(PC pc)
     }
   }
   if (patch->save_operators) {
-    for (i = 0; i < patch->npatch; ++i) {
-      ierr = MatZeroEntries(patch->mat[i]);CHKERRQ(ierr);
-      ierr = PCPatchComputeOperator_Internal(pc, NULL, patch->mat[i], i, PETSC_FALSE);CHKERRQ(ierr);
-      ierr = KSPSetOperators((KSP) patch->solver[i], patch->mat[i], patch->mat[i]);CHKERRQ(ierr);
+    if (patch->precomputeElementTensors) {
+        ierr = PCPatchPrecomputePatchTensors_Private(pc);CHKERRQ(ierr);
+    } else {
+      for (i = 0; i < patch->npatch; ++i) {
+        ierr = MatZeroEntries(patch->mat[i]);CHKERRQ(ierr);
+        ierr = PCPatchComputeOperator_Internal(pc, NULL, patch->mat[i], i, PETSC_FALSE);CHKERRQ(ierr);
+        ierr = KSPSetOperators((KSP) patch->solver[i], patch->mat[i], patch->mat[i]);CHKERRQ(ierr);
+      }
     }
   }
   if(patch->local_composition_type == PC_COMPOSITE_MULTIPLICATIVE) {
