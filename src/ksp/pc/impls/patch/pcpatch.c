@@ -2055,7 +2055,7 @@ PetscErrorCode PCPatchComputeOperator_Internal(PC pc, Vec x, Mat mat, PetscInt p
     for (i = 0; i < ncell; i++) {
       const PetscInt     cell = cellsArray[i + offset];
       const PetscInt    *idx  = dofsArray + (offset + i)*ndof;
-      const PetscScalar *v    = elementTensors + cell*ndof*ndof;
+      const PetscScalar *v    = elementTensors + patch->precomputedTensorLocations[cell]*ndof*ndof;
       ierr = MatSetValues(mat, ndof, idx, ndof, idx, v, ADD_VALUES);CHKERRQ(ierr);
     }
     ierr = VecRestoreArrayRead(patch->cellMats, &elementTensors);CHKERRQ(ierr);
@@ -2182,6 +2182,9 @@ static PetscErrorCode PCPatchPrecomputePatchTensors_Private(PC pc)
   const PetscInt  ndof  = patch->totalDofsPerCell;
   PetscErrorCode  ierr;
   Mat             vecMat;
+  PetscInt        cStart, cEnd;
+  DM              dm, plex;
+
 
   ierr = PetscLogEventBegin(PC_Patch_ComputeOp, pc, 0, 0, 0);CHKERRQ(ierr);
 
@@ -2204,11 +2207,17 @@ static PetscErrorCode PCPatchPrecomputePatchTensors_Private(PC pc)
     ierr = ISRestoreIndices(patch->cells, &cellsArray);CHKERRQ(ierr);
     ierr = PetscHSetIGetSize(cells, &ncell);CHKERRQ(ierr);
     ierr = PetscMalloc1(ncell, &allCells);CHKERRQ(ierr);
+    ierr = PCGetDM(pc, &dm);CHKERRQ(ierr);
+    ierr = DMConvert(dm, DMPLEX, &plex);CHKERRQ(ierr);
+    ierr = DMPlexGetHeightStratum(dm, 0, &cStart, &cEnd);CHKERRQ(ierr);
+    ierr = PetscMalloc1(cEnd-cStart, &patch->precomputedTensorLocations);CHKERRQ(ierr);
     i = 0;
     PetscHashIterBegin(cells, hi);
     while (!PetscHashIterAtEnd(cells, hi)) {
-      PetscHashIterGetKey(cells, hi, allCells[i++]);
+      PetscHashIterGetKey(cells, hi, allCells[i]);
+      patch->precomputedTensorLocations[allCells[i]] = i;
       PetscHashIterNext(cells, hi);
+      i++;
     }
     ierr = PetscHSetIDestroy(&cells);CHKERRQ(ierr);
     ierr = ISCreateGeneral(PETSC_COMM_SELF, ncell, allCells, PETSC_OWN_POINTER, &patch->allCells);CHKERRQ(ierr);
@@ -2858,6 +2867,9 @@ static PetscErrorCode PCReset_PATCH(PC pc)
   if (patch->userIS) {
     for (i = 0; i < patch->npatch; ++i) {ierr = ISDestroy(&patch->userIS[i]);CHKERRQ(ierr);}
     ierr = PetscFree(patch->userIS);CHKERRQ(ierr);
+  }
+  if (patch->precomputedTensorLocations) {
+    ierr = PetscFree(patch->precomputedTensorLocations);CHKERRQ(ierr);
   }
   patch->bs          = 0;
   patch->cellNodeMap = NULL;
