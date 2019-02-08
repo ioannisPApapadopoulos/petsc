@@ -2318,13 +2318,12 @@ static PetscErrorCode PCSetUp_PATCH_Linear(PC pc)
   }
   if (patch->save_operators) {
     if (patch->precomputeElementTensors) {
-        ierr = PCPatchPrecomputePatchTensors_Private(pc);CHKERRQ(ierr);
-    } else {
-      for (i = 0; i < patch->npatch; ++i) {
-        ierr = MatZeroEntries(patch->mat[i]);CHKERRQ(ierr);
-        ierr = PCPatchComputeOperator_Internal(pc, NULL, patch->mat[i], i, PETSC_FALSE);CHKERRQ(ierr);
-        ierr = KSPSetOperators((KSP) patch->solver[i], patch->mat[i], patch->mat[i]);CHKERRQ(ierr);
-      }
+      ierr = PCPatchPrecomputePatchTensors_Private(pc);CHKERRQ(ierr);
+    }
+    for (i = 0; i < patch->npatch; ++i) {
+      ierr = MatZeroEntries(patch->mat[i]);CHKERRQ(ierr);
+      ierr = PCPatchComputeOperator_Internal(pc, NULL, patch->mat[i], i, PETSC_FALSE);CHKERRQ(ierr);
+      ierr = KSPSetOperators((KSP) patch->solver[i], patch->mat[i], patch->mat[i]);CHKERRQ(ierr);
     }
   }
   if(patch->local_composition_type == PC_COMPOSITE_MULTIPLICATIVE) {
