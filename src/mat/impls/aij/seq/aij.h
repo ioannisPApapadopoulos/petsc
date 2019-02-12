@@ -269,6 +269,8 @@ PETSC_INTERN PetscErrorCode MatEqual_SeqAIJ(Mat,Mat,PetscBool*);
 PETSC_INTERN PetscErrorCode MatFDColoringCreate_SeqXAIJ(Mat,ISColoring,MatFDColoring);
 PETSC_INTERN PetscErrorCode MatFDColoringSetUp_SeqXAIJ(Mat,ISColoring,MatFDColoring);
 PETSC_INTERN PetscErrorCode MatFDColoringSetUpBlocked_AIJ_Private(Mat,MatFDColoring,PetscInt);
+PETSC_INTERN PetscErrorCode MatLoad_AIJ_HDF5(Mat,PetscViewer);
+PETSC_INTERN PetscErrorCode MatLoad_SeqAIJ_Binary(Mat,PetscViewer);
 PETSC_INTERN PetscErrorCode MatLoad_SeqAIJ(Mat,PetscViewer);
 PETSC_INTERN PetscErrorCode RegisterApplyPtAPRoutines_Private(Mat);
 
@@ -368,6 +370,7 @@ PETSC_INTERN PetscErrorCode MatSetSeqMat_SeqAIJ(Mat,IS,IS,MatStructure,Mat);
 PETSC_INTERN PetscErrorCode MatDestroySubMatrix_Private(Mat_SubSppt*);
 PETSC_INTERN PetscErrorCode MatDestroySubMatrix_SeqAIJ(Mat);
 PETSC_INTERN PetscErrorCode MatDestroySubMatrix_Dummy(Mat);
+PETSC_INTERN PetscErrorCode MatDestroySubMatrices_Dummy(PetscInt, Mat*[]);
 PETSC_INTERN PetscErrorCode MatCreateSubMatrix_SeqAIJ(Mat,IS,IS,PetscInt,MatReuse,Mat*);
 
 /*
