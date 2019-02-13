@@ -2449,7 +2449,7 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
   ierr = PetscMalloc1(size, &numLocalVerticesAllProcesses);CHKERRQ(ierr);
   numLocalVerticesAllProcesses[rank] = 1 + numNonExclusivelyOwned;
   /* For numbering purposes we need to figure out how many vertices are on each core. */
-  MPI_Allgather(MPI_IN_PLACE,0,MPI_DATATYPE_NULL,numLocalVerticesAllProcesses,1,MPIU_INT,comm);CHKERRQ(ierr);
+  ierr = MPI_Allgather(MPI_IN_PLACE,0,MPI_DATATYPE_NULL,numLocalVerticesAllProcesses,1,MPIU_INT,comm);CHKERRQ(ierr);
 
   ierr = PetscMalloc1(size+1, &cumSumVertices);CHKERRQ(ierr);
   cumSumVertices[0] = 0;
@@ -2609,7 +2609,8 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
     xadj[0] = 0;
     counter = 0;
     for (i=0; i<1+numNonExclusivelyOwned; i++) {
-      PetscInt temp=0, *cols;
+      PetscInt        temp=0;
+      const PetscInt *cols;
       ierr = MatGetRow(A, cumSumVertices[rank] + i, &temp, &cols, NULL);CHKERRQ(ierr);
       for (j=0; j<temp; j++) {
         adjncy[counter+j] = cols[j];
@@ -2649,7 +2650,7 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
     PetscInt *numExclusivelyOwnedAll;
     ierr = PetscMalloc1(size, &numExclusivelyOwnedAll);CHKERRQ(ierr);
     numExclusivelyOwnedAll[rank] = numExclusivelyOwned;
-    MPI_Allgather(MPI_IN_PLACE,0,MPI_DATATYPE_NULL,numExclusivelyOwnedAll,1,MPIU_INT,comm);
+    ierr = MPI_Allgather(MPI_IN_PLACE,0,MPI_DATATYPE_NULL,numExclusivelyOwnedAll,1,MPIU_INT,comm);CHKERRQ(ierr);
 
     ierr = MatGetSize(As, &numRows, NULL);CHKERRQ(ierr);
     ierr = PetscMalloc1(numRows, &partGlobal);CHKERRQ(ierr);
@@ -2669,7 +2670,8 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
       xadj_g[0] = 0;
       counter = 0;
       for (i=0; i<numRows; i++) {
-        PetscInt temp=0, *cols;
+        PetscInt        temp=0;
+        const PetscInt *cols;
         ierr = MatGetRow(As, i, &temp, &cols, NULL);CHKERRQ(ierr);
         for (j=0; j<temp; j++) {
           adjncy_g[counter+j] = cols[j];
@@ -2707,13 +2709,15 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
     }
     ierr = PetscFree(numExclusivelyOwnedAll);CHKERRQ(ierr);
 
-    MPI_Bcast(partGlobal,numRows,MPIU_INT,0, comm);
+    ierr = MPI_Bcast(partGlobal,numRows,MPIU_INT,0, comm);CHKERRQ(ierr);
     for (i=cumSumVertices[rank]; i<cumSumVertices[rank+1]; i++) {
       part[i-cumSumVertices[rank]] = partGlobal[i];
     }
     ierr = PetscFree(partGlobal);CHKERRQ(ierr);
+    ierr = MatDestroy(&As);CHKERRQ(ierr);
   }
 
+  ierr = MatDestroy(&A);CHKERRQ(ierr);
   ierr = PetscFree(ubvec);CHKERRQ(ierr);
   ierr = PetscFree(tpwgts);CHKERRQ(ierr);
   ierr = PetscFree(options);CHKERRQ(ierr);
@@ -2724,7 +2728,7 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
   ierr = PetscMalloc1(size, &firstVertices);CHKERRQ(ierr);
   ierr = PetscMalloc1(size, &renumbering);CHKERRQ(ierr);
   firstVertices[rank] = part[0];
-  MPI_Allgather(MPI_IN_PLACE,0,MPI_DATATYPE_NULL,firstVertices,1,MPIU_INT,comm);
+  ierr = MPI_Allgather(MPI_IN_PLACE,0,MPI_DATATYPE_NULL,firstVertices,1,MPIU_INT,comm);CHKERRQ(ierr);
   for (i=0; i<size; i++) {
     renumbering[firstVertices[i]] = i;
   }
@@ -2733,7 +2737,7 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
   }
   /* Check if the renumbering worked (this can fail when ParMETIS gives fewer partitions than there are processes) */
   failed = (PetscInt)(part[0] != rank);
-  MPI_Allreduce(&failed, &failedGlobal, 1, MPIU_INT, MPI_SUM, comm);
+  ierr = MPI_Allreduce(&failed, &failedGlobal, 1, MPIU_INT, MPI_SUM, comm);CHKERRQ(ierr);
 
   if (failedGlobal > 0) {
     PetscFunctionReturn(1);
@@ -2749,8 +2753,8 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
       distribution[part[i]] += vtxwgt[ncon*i];
       distribution_before[rank] += vtxwgt[ncon*i];
     }
-    MPI_Allreduce(MPI_IN_PLACE, distribution, size, MPIU_INT, MPI_SUM, comm);
-    MPI_Allreduce(MPI_IN_PLACE, distribution_before, size, MPIU_INT, MPI_SUM, comm);
+    ierr = MPI_Allreduce(MPI_IN_PLACE, distribution, size, MPIU_INT, MPI_SUM, comm);CHKERRQ(ierr);
+    ierr = MPI_Allreduce(MPI_IN_PLACE, distribution_before, size, MPIU_INT, MPI_SUM, comm);CHKERRQ(ierr);
     min = distribution[0];
     max = distribution[0];
     min_before = distribution_before[0];
@@ -2784,7 +2788,7 @@ PetscErrorCode DMPlexRebalanceSharedPoints(DM dm, PetscBool useInitialGuess, Pet
     for (i=0; i<cumSumVertices[rank+1]-cumSumVertices[rank]; i++) {
       distribution[part[i]] += vtxwgt[ncon*i];
     }
-    MPI_Allreduce(MPI_IN_PLACE, distribution, size, MPIU_INT, MPI_SUM, comm);
+    ierr = MPI_Allreduce(MPI_IN_PLACE, distribution, size, MPIU_INT, MPI_SUM, comm);CHKERRQ(ierr);
     min = distribution[0];
     max = distribution[0];
     for (i=1; i<size; i++) {
