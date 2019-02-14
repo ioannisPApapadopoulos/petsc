@@ -2632,6 +2632,23 @@ static PetscErrorCode PCSetUp_PATCH(PC pc)
       for (i = 0; i < patch->npatch; ++i) {
         ierr = PCPatchCreateMatrix_Private(pc, i, &patch->mat[i], PETSC_FALSE);CHKERRQ(ierr);
       }
+      if (patch->viewPatchStatistics) {
+        MatInfo  info;
+        MPI_Comm comm;
+        PetscInt m;
+        PetscLogDouble nz_used;
+        PetscScalar avg_fill = 0;
+        ierr = PetscObjectGetComm((PetscObject) pc, &comm);CHKERRQ(ierr);
+        for (i = 0; i < patch->npatch; ++i) {
+          ierr = MatGetInfo(patch->mat[i],MAT_LOCAL,&info);CHKERRQ(ierr);
+          ierr = MatGetSize(patch->mat[i],&m, NULL);CHKERRQ(ierr);
+          avg_fill += ((PetscInt)info.nz_used)/(1.*m*m);
+
+        }
+        avg_fill *= (1./patch->npatch);
+        ierr = PetscSynchronizedPrintf(comm, "Witouth artificial: average fill: %f\n", avg_fill);CHKERRQ(ierr);
+        ierr = PetscSynchronizedFlush(comm, PETSC_STDOUT);CHKERRQ(ierr);
+      }
     }
     ierr = PetscLogEventEnd(PC_Patch_CreatePatches, pc, 0, 0, 0);CHKERRQ(ierr);
 
