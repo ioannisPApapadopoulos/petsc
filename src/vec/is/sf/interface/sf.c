@@ -1485,3 +1485,67 @@ PetscErrorCode PetscSFCompose(PetscSF sfA, PetscSF sfB, PetscSF *sfBA)
   ierr = PetscSFSetGraph(*sfBA, numRootsA, numLeavesB, localPointsB, PETSC_COPY_VALUES, remotePointsBA, PETSC_OWN_POINTER);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
+
+/*@
+ PetscSFDuplicateToComm - Copy a PetscSF into a new communicator
+
+ Translates the ranks in iremote into ranks in the new communicator.
+
+
+ Input parameters:
+
+ + sfA - The old PetscSF
+ . comm - The new communicator
+
+ Output parameters:
+
+ . sfB - The new PetscSF on the provided communicator
+
+ Level: developer
+@*/
+PetscErrorCode PetscSFDuplicateToComm(PetscSF sfA, MPI_Comm comm, PetscSF *sfB)
+{
+  MPI_Comm           ocomm       = MPI_COMM_NULL;
+  MPI_Group          old_group   = MPI_GROUP_NULL, new_group = MPI_GROUP_NULL;
+  PetscInt           nroots      = 0, nleaves = 0, i;
+  const PetscInt    *ilocal      = NULL;
+  const PetscSFNode *iremote     = NULL;
+  PetscMPIInt       *old_ranks   = NULL, *new_ranks = NULL;
+  PetscSFNode       *new_iremote = NULL;
+  PetscInt          *new_ilocal  = NULL;
+  PetscErrorCode     ierr;
+
+  PetscFunctionBegin;
+
+  ierr = PetscSFCreate(comm, sfB);CHKERRQ(ierr);
+  ierr = MPI_Comm_group(comm, &new_group);CHKERRQ(ierr);
+  if (sfA) {
+    ocomm = PetscObjectComm((PetscObject)sfA);
+    ierr = MPI_Comm_group(ocomm, &old_group);CHKERRQ(ierr);
+    ierr = PetscSFGetGraph(sfA, &nroots, &nleaves, &ilocal, &iremote);CHKERRQ(ierr);
+    if (sfA->graphset) {
+      ierr = PetscMalloc1(nleaves, &old_ranks);CHKERRQ(ierr);
+      for (i = 0; i < nleaves; i++) {
+        old_ranks[i] = (PetscMPIInt)iremote[i].rank;
+      }
+      ierr = PetscMalloc1(nleaves, &new_iremote);CHKERRQ(ierr);
+      ierr = PetscMalloc1(nleaves, &new_ilocal);CHKERRQ(ierr);
+      ierr = PetscMalloc1(nleaves, &new_ranks);CHKERRQ(ierr);
+
+      ierr = MPI_Group_translate_ranks(old_group, nleaves, old_ranks, new_group, new_ranks);CHKERRQ(ierr);
+      for (i = 0; i < nleaves; i++) {
+        new_ilocal[i] = ilocal[i];
+        new_iremote[i].rank = (PetscInt)new_ranks[i];
+        new_iremote[i].index = iremote[i].index;
+      }
+      ierr = PetscFree(new_ranks);CHKERRQ(ierr);
+      ierr = PetscFree(old_ranks);CHKERRQ(ierr);
+    } else {
+      nroots = 0;
+      nleaves = 0;
+    }
+  }
+  ierr = PetscSFSetGraph(*sfB, nroots, nleaves, new_ilocal, PETSC_OWN_POINTER, new_iremote, PETSC_OWN_POINTER);CHKERRQ(ierr);
+
+  PetscFunctionReturn(0);
+}
