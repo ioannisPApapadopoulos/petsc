@@ -1706,6 +1706,31 @@ PetscErrorCode DMPlexMigrate(DM dm, PetscSF sf, DM targetDM)
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode DMPlexDuplicateToComm(DM dm, MPI_Comm comm, DM *ndm)
+{
+  PetscErrorCode ierr;
+  PetscSF        pointSF = NULL;
+  PetscSF        npointSF;
+
+  PetscFunctionBegin;
+  ierr = DMPlexCreate(comm, ndm);CHKERRQ(ierr);
+  if (dm) {
+    DM_Plex *mesh = (DM_Plex *)dm->data;
+
+    ierr = PetscFree((*ndm)->data);CHKERRQ(ierr);
+
+    mesh->refct++;
+
+    (*ndm)->data = mesh;
+
+    ierr = DMGetPointSF(dm, &pointSF);CHKERRQ(ierr);
+  }
+  ierr = PetscSFDuplicateToComm(pointSF, comm, &npointSF);CHKERRQ(ierr);
+
+  ierr = DMSetPointSF(*ndm, npointSF);CHKERRQ(ierr);
+
+  PetscFunctionReturn(0);
+}
 /*@C
   DMPlexDistribute - Distributes the mesh and any associated sections.
 
