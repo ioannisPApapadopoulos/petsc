@@ -1711,12 +1711,28 @@ PetscErrorCode DMPlexDuplicateToComm(DM dm, MPI_Comm comm, DM *ndm)
   PetscErrorCode ierr;
   PetscSF        pointSF = NULL;
   PetscSF        npointSF;
+  PetscInt       tdim, gdim;
+  PetscMPIInt    bcastRank, rank = -1;
+  MPI_Group      ogroup, ngroup;
 
+  /* FIXME: Doesn't work if comm has fewer ranks than dm->comm */
+  /* Should really change interface of DMPlexDistribute to:
+   * DMPlexDistribute(dm, overlap, target_comm, sf, newdm)
+   * Would then be collective over target_comm v dm->comm.
+   * What we're doing here is converting dm on commA into dm on commB by putting "empty" DMs everywhere else. */
   PetscFunctionBegin;
   ierr = DMPlexCreate(comm, ndm);CHKERRQ(ierr);
+
+  if (dm) {
+    ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  }
+  /* Determine which rank in the subcommunicator will broadcast information */
+  ierr = MPI_Allreduce(&rank, &bcastRank, 1, MPI_INT, MPI_MAX, comm);CHKERRQ(ierr);
   if (dm) {
     DM_Plex *mesh = (DM_Plex *)dm->data;
 
+    ierr = DMGetDimension(dm, &tdim);CHKERRQ(ierr);
+    ierr = DMGetCoordinateDim(dm, &gdim);CHKERRQ(ierr);
     ierr = PetscFree((*ndm)->data);CHKERRQ(ierr);
 
     mesh->refct++;
@@ -1724,11 +1740,19 @@ PetscErrorCode DMPlexDuplicateToComm(DM dm, MPI_Comm comm, DM *ndm)
     (*ndm)->data = mesh;
 
     ierr = DMGetPointSF(dm, &pointSF);CHKERRQ(ierr);
+    ierr = PetscFree((*newdm)->labels);CHKERRQ(ierr);
+    dm->labels->refct++;
   }
   ierr = PetscSFDuplicateToComm(pointSF, comm, &npointSF);CHKERRQ(ierr);
 
-  ierr = DMSetPointSF(*ndm, npointSF);CHKERRQ(ierr);
+  ierr = MPI_Bcast(&tdim, 1, MPIU_INT, bcastRank, comm);CHKERRQ(ierr);
+  ierr = MPI_Bcast(&gdim, 1, MPIU_INT, bcastRank, comm);CHKERRQ(ierr);
 
+  ierr = DMSetDimension(ndm, tdim);CHKERRQ(ierr);
+  ierr = DMSetCoordinateDim(ndm, gdim);CHKERRQ(ierr);
+  ierr = DMSetPointSF(*ndm, npointSF);CHKERRQ(ierr);
+  ierr = DMPlexSymmetrize(ndm);CHKERRQ(ierr);
+  ierr = DMPlexStratify(ndm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 /*@C
