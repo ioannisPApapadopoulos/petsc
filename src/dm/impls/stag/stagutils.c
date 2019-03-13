@@ -478,6 +478,62 @@ PetscErrorCode DMStagGetStencilWidth(DM dm,PetscInt *stencilWidth)
 }
 
 /*@C
+  DMStagGetGhostType - get elementwise ghost/halo stencil type
+
+  Logically Collective
+
+  Input Parameters:
++ dm - the DMStag object
+- stencilType - the elementwise ghost stencil type: DMSTAG_STENCIL_BOX, DMSTAG_STENCIL_STAR, or DMSTAG_STENCIL_NONE
+
+  Level: beginner
+
+.seealso: DMSTAG
+@*/
+PetscErrorCode DMStagGetGhostType(DM dm,DMStagStencilType *stencilType)
+{
+  DM_Stag * const stag = (DM_Stag*)dm->data;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecificType(dm,DM_CLASSID,1,DMSTAG);
+  PetscValidLogicalCollectiveEnum(dm,stencilType,2);
+  *stencilType = stag->stencilType;
+  PetscFunctionReturn(0);
+}
+
+/*@C
+      DMStagGetOwnershipRanges - get elements per rank in each direction
+
+    Not Collective
+
+   Input Parameter:
+.     da - the DMStag object
+
+   Output Parameter:
++     lx - ownership along x direction (optional)
+.     ly - ownership along y direction (optional)
+-     lz - ownership along z direction (optional)
+
+  Notes:
+  Arguments corresponding to higher dimensions are ignored for 1D and 2D grids. These arguments may be set to NULL in this case.
+
+  Level: intermediate
+
+.seealso: DMSTAG, DMStagSetGlobalSizes, DMStagSetOwnershipRanges
+@*/
+PetscErrorCode  DMStagGetOwnershipRanges(DM da,const PetscInt *lx[],const PetscInt *ly[],const PetscInt *lz[])
+{
+  DM_Stag * const stag = (DM_Stag*)dm->data;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecificType(da,DM_CLASSID,1,DMSTAG);
+  if (lx) *lx = stag->l[0];
+  if (ly) *ly = stag->l[1];
+  if (lz) *lz = stag->l[2];
+  PetscFunctionReturn(0);
+}
+
+/*@C
   DMStagCreateCompatibleDMStag - create a compatible DMStag with different dof/stratum
 
   Collective
@@ -877,6 +933,32 @@ PetscErrorCode DMStagSetGhostType(DM dm,DMStagStencilType stencilType)
 }
 
 /*@C
+  DMStagSetStencilWidth - set elementwise stencil width
+
+  Not Collective
+
+  Input Parameter:
+. dm - the DMStag object
+
+  Output Parameters:
+. stencilWidth - stencil/halo/ghost width in elements
+
+  Level: beginner
+
+.seealso: DMSTAG
+@*/
+PetscErrorCode DMStagSetStencilWidth(DM dm,PetscInt stencilWidth)
+{
+  const DM_Stag * const stag = (DM_Stag*)dm->data;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecificType(dm,DM_CLASSID,1,DMSTAG);
+  if (dm->setupcalled) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONGSTATE,"This function must be called before DMSetUp()");
+  stag->stencilWidth = stencilWidth;
+  PetscFunctionReturn(0);
+}
+
+/*@C
   DMStagSetGlobalSizes -
 
   Logically Collective
@@ -919,7 +1001,7 @@ PetscErrorCode DMStagSetGlobalSizes(DM dm,PetscInt N0,PetscInt N1,PetscInt N2)
 
   Level: developer
 
-.seealso: DMSTAG, DMStagSetGlobalSizes
+.seealso: DMSTAG, DMStagSetGlobalSizes, DMStagGetOwnershipRanges
 @*/
 PetscErrorCode DMStagSetOwnershipRanges(DM dm,PetscInt const *lx,PetscInt const *ly,PetscInt const *lz)
 {
