@@ -521,7 +521,7 @@ PetscErrorCode DMStagGetGhostType(DM dm,DMStagStencilType *stencilType)
 
 .seealso: DMSTAG, DMStagSetGlobalSizes, DMStagSetOwnershipRanges
 @*/
-PetscErrorCode  DMStagGetOwnershipRanges(DM da,const PetscInt *lx[],const PetscInt *ly[],const PetscInt *lz[])
+PetscErrorCode DMStagGetOwnershipRanges(DM da,const PetscInt *lx[],const PetscInt *ly[],const PetscInt *lz[])
 {
   DM_Stag * const stag = (DM_Stag*)dm->data;
 
@@ -626,7 +626,7 @@ PetscErrorCode DMStagGetLocationSlot(DM dm,DMStagStencilLocation loc,PetscInt c,
 
   Input Parameters:
 + dm - the source DMStag object
-. vec - the destination vector, compatible with dm
+. vec - the source vector, compatible with dm
 . dmTo - the compatible destination DMStag object
 - vecTo - the destination vector, compatible with dmTo
 
