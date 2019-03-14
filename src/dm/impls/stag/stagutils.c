@@ -1047,16 +1047,22 @@ PetscErrorCode DMStagSetUniformCoordinates(DM dm,PetscReal xmin,PetscReal xmax,P
 {
   PetscErrorCode  ierr;
   DM_Stag * const stag = (DM_Stag*)dm->data;
-  PetscBool       flg;
+  PetscBool       flg_stag;
+  PetscBool       flg_product;
 
   PetscFunctionBegin;
   PetscValidHeaderSpecificType(dm,DM_CLASSID,1,DMSTAG);
   if (!dm->setupcalled) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_WRONGSTATE,"This function must be called after DMSetUp()");
   if (!stag->coordinateDMType) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_ARG_OUTOFRANGE,"You must first call DMStagSetCoordinateDMType()");
-  ierr = PetscStrcmp(stag->coordinateDMType,DMSTAG,&flg);CHKERRQ(ierr);
-  if (flg) {
+  ierr = PetscStrcmp(stag->coordinateDMType,DMSTAG,&flg_stag);CHKERRQ(ierr);
+  ierr = PetscStrcmp(stag->coordinateDMType,DMPRODUCT,&flg_product);CHKERRQ(ierr);
+  if (flg_stag) {
     ierr = DMStagSetUniformCoordinatesExplicit(dm,xmin,xmax,ymin,ymax,zmin,zmax);CHKERRQ(ierr);
-  } else SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Unsupported DM Type %s",stag->coordinateDMType);
+  } 
+  else if (flg_product) {
+        ierr = DMStagSetUniformCoordinatesProduct(dm,xmin,xmax,ymin,ymax,zmin,zmax);CHKERRQ(ierr);
+  }
+  else SETERRQ1(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Unsupported DM Type %s",stag->coordinateDMType);
   PetscFunctionReturn(0);
 }
 
