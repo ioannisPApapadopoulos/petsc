@@ -14,7 +14,7 @@
 . dof0 - number of degrees of freedom per vertex/point/node/0-cell
 . dof1 - number of degrees of freedom per edge/1-cell
 . dof2 - number of degrees of freedom per element/2-cell
-. stencilType - ghost/halo region type: DMSTAG_STENCIL_BOX or DMSTAG_STENCIL_NONE
+. stencilType - ghost/halo region type: DMSTAG_STENCIL_NONE, DMSTAG_STENCIL_BOX, or DMSTAG_STENCIL_STAR
 . stencilWidth - width, in elements, of halo/ghost region
 - lx,ly - arrays of local x,y element counts, of length equal to m,n, summing to M,N
 
