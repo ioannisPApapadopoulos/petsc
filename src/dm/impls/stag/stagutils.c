@@ -507,7 +507,7 @@ PetscErrorCode DMStagGetGhostType(DM dm,DMStagStencilType *stencilType)
     Not Collective
 
    Input Parameter:
-.     da - the DMStag object
+.     dm - the DMStag object
 
    Output Parameter:
 +     lx - ownership along x direction (optional)
@@ -521,12 +521,12 @@ PetscErrorCode DMStagGetGhostType(DM dm,DMStagStencilType *stencilType)
 
 .seealso: DMSTAG, DMStagSetGlobalSizes, DMStagSetOwnershipRanges
 @*/
-PetscErrorCode DMStagGetOwnershipRanges(DM da,const PetscInt *lx[],const PetscInt *ly[],const PetscInt *lz[])
+PetscErrorCode DMStagGetOwnershipRanges(DM dm,const PetscInt *lx[],const PetscInt *ly[],const PetscInt *lz[])
 {
-  DM_Stag * const stag = (DM_Stag*)dm->data;
+  const DM_Stag * const stag = (DM_Stag*)dm->data;
 
   PetscFunctionBegin;
-  PetscValidHeaderSpecificType(da,DM_CLASSID,1,DMSTAG);
+  PetscValidHeaderSpecificType(dm,DM_CLASSID,1,DMSTAG);
   if (lx) *lx = stag->l[0];
   if (ly) *ly = stag->l[1];
   if (lz) *lz = stag->l[2];
@@ -949,7 +949,7 @@ PetscErrorCode DMStagSetGhostType(DM dm,DMStagStencilType stencilType)
 @*/
 PetscErrorCode DMStagSetStencilWidth(DM dm,PetscInt stencilWidth)
 {
-  const DM_Stag * const stag = (DM_Stag*)dm->data;
+  DM_Stag * const stag = (DM_Stag*)dm->data;
 
   PetscFunctionBegin;
   PetscValidHeaderSpecificType(dm,DM_CLASSID,1,DMSTAG);
