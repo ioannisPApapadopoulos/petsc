@@ -932,7 +932,7 @@ PetscErrorCode MatSetUp(Mat A)
          format (which is in many cases the same as the default)
 .    PETSC_VIEWER_ASCII_INFO - prints basic information about the matrix
          size and structure (not the matrix entries)
-.    PETSC_VIEWER_ASCII_INFO_DETAIL - prints more detailed information about
+-    PETSC_VIEWER_ASCII_INFO_DETAIL - prints more detailed information about
          the matrix structure
 
    Options Database Keys:
@@ -951,17 +951,17 @@ PetscErrorCode MatSetUp(Mat A)
    Level: beginner
 
    Notes:
-    see the manual page for MatLoad() for the exact format of the binary file when the binary
+    See the manual page for MatLoad() for the exact format of the binary file when the binary
       viewer is used.
 
       See share/petsc/matlab/PetscBinaryRead.m for a Matlab code that can read in the binary file when the binary
       viewer is used.
 
-      One can use '-mat_view draw -draw_pause -1' to pause the graphical display of matrix nonzero structure.
-      And then use the following mouse functions:
-          left mouse: zoom in
-          middle mouse: zoom out
-          right mouse: continue with the simulation
+      One can use '-mat_view draw -draw_pause -1' to pause the graphical display of matrix nonzero structure,
+      and then use the following mouse functions.
++ left mouse: zoom in
+. middle mouse: zoom out
+- right mouse: continue with the simulation
 
    Concepts: matrices^viewing
    Concepts: matrices^plotting
@@ -4160,6 +4160,7 @@ PetscErrorCode MatConvert(Mat mat, MatType newtype,MatReuse reuse,Mat *M)
     PetscInt       i;
     /*
        Order of precedence:
+       0) See if newtype is a superclass of the current matrix.
        1) See if a specialized converter is known to the current matrix.
        2) See if a specialized converter is known to the desired matrix class.
        3) See if a good general converter is registered for the desired class
@@ -4168,6 +4169,24 @@ PetscErrorCode MatConvert(Mat mat, MatType newtype,MatReuse reuse,Mat *M)
        5) Use a really basic converter.
     */
 
+    /* 0) See if newtype is a superclass of the current matrix.
+          i.e mat is mpiaij and newtype is aij */
+    for (i=0; i<2; i++) {
+      ierr = PetscStrncpy(convname,prefix[i],sizeof(convname));CHKERRQ(ierr);
+      ierr = PetscStrlcat(convname,newtype,sizeof(convname));CHKERRQ(ierr);
+      ierr = PetscStrcmp(convname,((PetscObject)mat)->type_name,&flg);CHKERRQ(ierr);
+      if (flg) {
+        if (reuse == MAT_INPLACE_MATRIX) {
+          PetscFunctionReturn(0);
+        } else if (reuse == MAT_INITIAL_MATRIX && mat->ops->duplicate) {
+          ierr = (*mat->ops->duplicate)(mat,MAT_COPY_VALUES,M);CHKERRQ(ierr);
+          PetscFunctionReturn(0);
+        } else if (reuse == MAT_REUSE_MATRIX && mat->ops->copy) {
+          ierr = MatCopy(mat,*M,SAME_NONZERO_PATTERN);CHKERRQ(ierr);
+          PetscFunctionReturn(0);
+        }
+      }
+    }
     /* 1) See if a specialized converter is known to the current matrix and the desired class */
     for (i=0; i<3; i++) {
       ierr = PetscStrncpy(convname,"MatConvert_",sizeof(convname));CHKERRQ(ierr);
@@ -11103,5 +11122,38 @@ PetscErrorCode MatHasCongruentLayouts(Mat mat,PetscBool *cong)
     if (*cong) mat->congruentlayouts = 1;
     else       mat->congruentlayouts = 0;
   } else *cong = mat->congruentlayouts ? PETSC_TRUE : PETSC_FALSE;
+  PetscFunctionReturn(0);
+}
+
+/*@
+    MatFreeIntermediateDataStructures - Free intermediate data structures created for reuse,
+    e.g., matrx product of MatPtAP.
+
+   Collective on mat
+
+   Input Parameters:
+.  mat - the matrix
+
+   Output Parameter:
+.  mat - the matrix with intermediate data structures released
+
+   Level: advanced
+
+   Notes:
+
+.keywords: matrix
+
+.seealso: MatPtAP(), MatMatMult()
+@*/
+PetscErrorCode MatFreeIntermediateDataStructures(Mat mat)
+{
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(mat,MAT_CLASSID,1);
+  PetscValidType(mat,1);
+  if (mat->ops->freeintermediatedatastructures) {
+    ierr = (*mat->ops->freeintermediatedatastructures)(mat);CHKERRQ(ierr);
+  }
   PetscFunctionReturn(0);
 }
