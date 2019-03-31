@@ -61,6 +61,8 @@ typedef struct {
   void                *usercomputefctx;
   IS                   cellIS;             /* Temporary IS for each cell patch */
   PetscBool            save_operators;     /* Save all operators (or create/destroy one at a time?) */
+  PetscScalar          *entity_weights;     /* Custom weights for dofs on entities of different dimension? */
+  PetscInt             num_entity_weights_passed;
   PetscBool            partition_of_unity; /* Weight updates by dof multiplicity? */
   PetscBool            multiplicative;     /* Gauss-Seidel instead of Jacobi?  */
   PCCompositeType      local_composition_type; /* locally additive or multiplicative? */

@@ -359,6 +359,24 @@ PetscErrorCode PCPatchGetPartitionOfUnity(PC pc, PetscBool *flg)
 }
 
 /* TODO: Docs */
+PetscErrorCode PCPatchSetEntityWeights(PC pc, PetscScalar* weights)
+{
+  PC_PATCH *patch = (PC_PATCH *) pc->data;
+  PetscFunctionBegin;
+  patch->entity_weights = weights;
+  PetscFunctionReturn(0);
+}
+
+/* TODO: Docs */
+PetscErrorCode PCPatchGetEntityWeights(PC pc, PetscScalar **weights)
+{
+  PC_PATCH *patch = (PC_PATCH *) pc->data;
+  PetscFunctionBegin;
+  *weights = patch->entity_weights;
+  PetscFunctionReturn(0);
+}
+
+/* TODO: Docs */
 PetscErrorCode PCPatchSetLocalComposition(PC pc, PCCompositeType type)
 {
   PC_PATCH *patch = (PC_PATCH *) pc->data;
@@ -2084,6 +2102,33 @@ static PetscErrorCode PCSetUp_PATCH(PC pc)
     }
     ierr = PetscLogEventEnd(PC_Patch_CreatePatches, pc, 0, 0, 0);CHKERRQ(ierr);
 
+    if (patch->num_entity_weights_passed) {
+      DM           dm;
+      PetscInt     dof, off, start, end, dim, d, l, j;
+      PetscScalar  *array;
+
+      ierr = PCGetDM(pc, &dm);CHKERRQ(ierr);
+      ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
+      ierr = VecDuplicate(patch->localRHS, &patch->dof_weights);CHKERRQ(ierr);
+      ierr = VecGetArray(patch->dof_weights, &array);CHKERRQ(ierr);
+      for (d=0; d<=dim; d++) {
+        ierr = DMPlexGetDepthStratum(dm, d, &start, &end);CHKERRQ(ierr);
+        for (p = start; p < end; ++p) {
+          for (i=0; i<patch->nsubspaces; i++) {
+            PetscInt subspaceOffset = patch->subspaceOffsets[i];
+            PetscInt bs             = patch->bs[i];
+            ierr = PCPatchGetGlobalDofs(pc, patch->dofSection, i, patch->combined, p, &dof, &off);CHKERRQ(ierr);
+            for (j = off; j < dof + off; ++j) {
+              for (l = 0; l < bs; ++l) {
+                PetscInt dof = bs*j + l + subspaceOffset;
+                array[dof] = patch->entity_weights[i*(dim+1)+d];
+              }
+            }
+          }
+        }
+      }
+      ierr = VecRestoreArray(patch->dof_weights, &array);CHKERRQ(ierr);
+    }
     /* If desired, calculate weights for dof multiplicity */
     if (patch->partition_of_unity) {
       PetscScalar *input = NULL;
@@ -2257,7 +2302,7 @@ static PetscErrorCode PCApply_PATCH(PC pc, Vec x, Vec y)
   }
   if (patch->user_patches) {ierr = ISRestoreIndices(patch->iterationSet, &iterationSet);CHKERRQ(ierr);}
   /* XXX: should we do this on the global vector? */
-  if (patch->partition_of_unity) {
+  if (patch->partition_of_unity || patch->num_entity_weights_passed) {
     ierr = VecPointwiseMult(patch->localUpdate, patch->localUpdate, patch->dof_weights);CHKERRQ(ierr);
   }
   /* Now patch->localUpdate contains the solution of the patch solves, so we need to combine them all. */
@@ -2387,6 +2432,7 @@ static PetscErrorCode PCReset_PATCH(PC pc)
     for (i = 0; i < patch->npatch; ++i) {ierr = ISDestroy(&patch->userIS[i]);CHKERRQ(ierr);}
     ierr = PetscFree(patch->userIS);CHKERRQ(ierr);
   }
+  ierr = PetscFree(patch->entity_weights);CHKERRQ(ierr);
   patch->bs          = 0;
   patch->cellNodeMap = NULL;
   patch->nsubspaces  = 0;
@@ -2445,6 +2491,12 @@ static PetscErrorCode PCSetFromOptions_PATCH(PetscOptionItems *PetscOptionsObjec
 
   ierr = PetscSNPrintf(option, PETSC_MAX_PATH_LEN, "-%s_patch_partition_of_unity", patch->classname);CHKERRQ(ierr);
   ierr = PetscOptionsBool(option, "Weight contributions by dof multiplicity?", "PCPatchSetPartitionOfUnity", patch->partition_of_unity, &patch->partition_of_unity, &flg);CHKERRQ(ierr);
+
+  patch->num_entity_weights_passed = 64;
+  ierr = PetscMalloc1(patch->num_entity_weights_passed, &(patch->entity_weights));CHKERRQ(ierr);
+  ierr = PetscSNPrintf(option, PETSC_MAX_PATH_LEN, "-%s_patch_entity_weights", patch->classname);CHKERRQ(ierr);
+  ierr = PetscOptionsRealArray(option, "Custom weight for dofs on vertices, edges(, facets) and cells.", "PCPatchSetEntityWeights", patch->entity_weights, &(patch->num_entity_weights_passed), &flg);CHKERRQ(ierr);
+  if (patch->partition_of_unity && flg) SETERRQ(comm, PETSC_ERR_ARG_WRONG, "Can only set one of patch_partition_of_unity or patch_entity_weights.");
 
   ierr = PetscSNPrintf(option, PETSC_MAX_PATH_LEN, "-%s_patch_local_type", patch->classname);CHKERRQ(ierr);
   ierr = PetscOptionsEnum(option,"Type of local solver composition (additive or multiplicative)","PCPatchSetLocalComposition",PCCompositeTypes,(PetscEnum)loctype,(PetscEnum*)&loctype,&flg);CHKERRQ(ierr);
