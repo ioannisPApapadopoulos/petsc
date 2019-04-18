@@ -88,7 +88,7 @@ def bootstrap():
             raise RuntimeError("Do not use --with-mpi-dir, use the environmental variables MPICC, MPICXX, MPIF90")
         if i.startswith('--with-cc'):
             raise RuntimeError("Do not use --with-cc, use the environmental variable MPICC")
-        if i.startswith('--with-cxx') and not i == "--with-cxx=0":
+        if i.startswith('--with-cxx') and not (i.startswith('--with-cxx-dialect') or i == "--with-cxx=0"):
             raise RuntimeError("Do not use --with-cxx, use the environmental variable MPICXX")
         if i.startswith('--with-fc') and not i == "--with-fc=0":
             raise RuntimeError("Do not use --with-fc, use the environmental variable MPIF90")
