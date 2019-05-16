@@ -609,7 +609,7 @@ PetscErrorCode PCSetUp_MG(PC pc)
       ierr     = PCMGSetLevels(pc,levels,NULL);CHKERRQ(ierr);
       n        = levels;
       ierr     = PCSetFromOptions(pc);CHKERRQ(ierr); /* it is bad to call this here, but otherwise will never be called for the new hierarchy */
-      mglevels =  mg->levels;
+      mglevels = mg->levels;
     }
   }
   ierr = KSPGetPC(mglevels[0]->smoothd,&cpc);CHKERRQ(ierr);
@@ -627,11 +627,10 @@ PetscErrorCode PCSetUp_MG(PC pc)
 
   if (!opsset) {
     ierr = PCGetUseAmat(pc,&use_amat);CHKERRQ(ierr);
-    if(use_amat){
+    if (use_amat) {
       ierr = PetscInfo(pc,"Using outer operators to define finest grid operator \n  because PCMGGetSmoother(pc,nlevels-1,&ksp);KSPSetOperators(ksp,...); was not called.\n");CHKERRQ(ierr);
       ierr = KSPSetOperators(mglevels[n-1]->smoothd,pc->mat,pc->pmat);CHKERRQ(ierr);
-    }
-    else {
+    } else {
       ierr = PetscInfo(pc,"Using matrix (pmat) operators to define finest grid operator \n  because PCMGGetSmoother(pc,nlevels-1,&ksp);KSPSetOperators(ksp,...); was not called.\n");CHKERRQ(ierr);
       ierr = KSPSetOperators(mglevels[n-1]->smoothd,pc->pmat,pc->pmat);CHKERRQ(ierr);
     }
@@ -676,6 +675,10 @@ PetscErrorCode PCSetUp_MG(PC pc)
       PetscBool dmhasrestrict, dmhasinject;
       ierr = KSPSetDM(mglevels[i]->smoothd,dms[i]);CHKERRQ(ierr);
       if (!needRestricts) {ierr = KSPSetDMActive(mglevels[i]->smoothd,PETSC_FALSE);CHKERRQ(ierr);}
+      if (mglevels[i]->smoothd != mglevels[i]->smoothu) {
+        ierr = KSPSetDM(mglevels[i]->smoothu,dms[i]);CHKERRQ(ierr);
+        if (!needRestricts) {ierr = KSPSetDMActive(mglevels[i]->smoothu,PETSC_FALSE);CHKERRQ(ierr);}
+      }
       ierr = DMGetDMKSPWrite(dms[i],&kdm);CHKERRQ(ierr);
       /* Ugly hack so that the next KSPSetUp() will use the RHS that we set. A better fix is to change dmActive to take
        * a bitwise OR of computing the matrix, RHS, and initial iterate. */
@@ -710,6 +713,10 @@ PetscErrorCode PCSetUp_MG(PC pc)
     /* finest smoother also gets DM but it is not active, independent of whether galerkin==PC_MG_GALERKIN_EXTERNAL */
     ierr = KSPSetDM(mglevels[n-1]->smoothd,pc->dm);CHKERRQ(ierr);
     ierr = KSPSetDMActive(mglevels[n-1]->smoothd,PETSC_FALSE);CHKERRQ(ierr);
+    if (mglevels[n-1]->smoothd != mglevels[n-1]->smoothu) {
+      ierr = KSPSetDM(mglevels[n-1]->smoothu,pc->dm);CHKERRQ(ierr);
+      ierr = KSPSetDMActive(mglevels[n-1]->smoothu,PETSC_FALSE);CHKERRQ(ierr);
+    }
   }
 
   if (mg->galerkin < PC_MG_GALERKIN_NONE) {

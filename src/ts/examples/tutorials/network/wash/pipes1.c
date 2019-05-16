@@ -287,13 +287,13 @@ PetscErrorCode PipesView(Vec X,DM networkdm,Wash wash)
 
   ierr = ISCreateGeneral(PETSC_COMM_SELF,nidx,idx1,PETSC_COPY_VALUES,&is1_q);CHKERRQ(ierr);
   ierr = ISCreateGeneral(PETSC_COMM_SELF,nidx,idx2,PETSC_COPY_VALUES,&is2_q);CHKERRQ(ierr);
-  ierr = VecScatterCreateWithData(X,is1_q,Xq,is2_q,&ctx_q);CHKERRQ(ierr);
+  ierr = VecScatterCreate(X,is1_q,Xq,is2_q,&ctx_q);CHKERRQ(ierr);
   ierr = VecScatterBegin(ctx_q,X,Xq,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
   ierr = VecScatterEnd(ctx_q,X,Xq,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
 
   ierr = ISCreateGeneral(PETSC_COMM_SELF,nidx,idx1_h,PETSC_COPY_VALUES,&is1_h);CHKERRQ(ierr);
   ierr = ISCreateGeneral(PETSC_COMM_SELF,nidx,idx2_h,PETSC_COPY_VALUES,&is2_h);CHKERRQ(ierr);
-  ierr = VecScatterCreateWithData(X,is1_h,Xh,is2_h,&ctx_h);CHKERRQ(ierr);
+  ierr = VecScatterCreate(X,is1_h,Xh,is2_h,&ctx_h);CHKERRQ(ierr);
   ierr = VecScatterBegin(ctx_h,X,Xh,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
   ierr = VecScatterEnd(ctx_h,X,Xh,INSERT_VALUES,SCATTER_FORWARD);CHKERRQ(ierr);
 
@@ -594,8 +594,9 @@ int main(int argc,char ** argv)
     ierr = DMNetworkAddNumVariables(networkdm,e,2*pipes[e-eStart].nnodes);CHKERRQ(ierr);
 
     if (size == 1 && monipipes) { /* Add monitor -- show Q_{pipes[e-eStart].id}? */
-      ierr = DMNetworkMonitorAdd(monitor, "Pipe Q", e, pipes[e-eStart].nnodes, 0, 2, -0.8, 0.8, PETSC_TRUE);CHKERRQ(ierr);
-      ierr = DMNetworkMonitorAdd(monitor, "Pipe H", e, pipes[e-eStart].nnodes, 1, 2, -400.0, 800.0, PETSC_TRUE);CHKERRQ(ierr);
+      pipes[e-eStart].length = 600.0;
+      ierr = DMNetworkMonitorAdd(monitor, "Pipe Q", e, pipes[e-eStart].nnodes, 0, 2, 0.0,pipes[e-eStart].length, -0.8, 0.8, PETSC_TRUE);CHKERRQ(ierr);
+      ierr = DMNetworkMonitorAdd(monitor, "Pipe H", e, pipes[e-eStart].nnodes, 1, 2, 0.0,pipes[e-eStart].length, -400.0, 800.0, PETSC_TRUE);CHKERRQ(ierr);
     }
   }
 

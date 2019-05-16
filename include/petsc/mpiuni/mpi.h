@@ -238,11 +238,13 @@ typedef int MPI_Datatype;
 #define MPI_LONG_INT           (12 << 20 | 1 << 8 | (int)(sizeof(long) + sizeof(int)))
 #define MPI_SHORT_INT          (13 << 20 | 1 << 8 | (int)(sizeof(short) + sizeof(int)))
 #define MPI_2INT               (14 << 20 | 1 << 8 | (int)(2*sizeof(int)))
+#define MPI_2DOUBLE            (15 << 20 | 1 << 8 | (int)(2*sizeof(double)))
 
 /* Fortran datatypes; Jed Brown says they should be defined here */
 #define MPI_INTEGER MPI_INT
 #define MPI_DOUBLE_PRECISION MPI_DOUBLE
 #define MPI_COMPLEX16 MPI_C_DOUBLE_COMPLEX
+#define MPI_2DOUBLE_PRECISION MPI_2DOUBLE
 
 #define MPI_ORDER_C            0
 #define MPI_ORDER_FORTRAN      1
@@ -494,6 +496,7 @@ typedef int MPI_Fint;
      (MPIUNI_ARG(count),\
       MPIUNI_ARG(array_of_requests),\
       MPIUNI_ARG(status),\
+      (*(status)).MPI_SOURCE = 0,               \
       *(index) = 0,\
       MPI_SUCCESS)
 #define MPI_Testany(a,b,c,d,e) \

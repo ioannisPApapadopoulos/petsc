@@ -88,6 +88,7 @@ PETSC_EXTERN PetscErrorCode KSPSetUpOnBlocks(KSP);
 PETSC_EXTERN PetscErrorCode KSPSolve(KSP,Vec,Vec);
 PETSC_EXTERN PetscErrorCode KSPSolveTranspose(KSP,Vec,Vec);
 PETSC_EXTERN PetscErrorCode KSPReset(KSP);
+PETSC_EXTERN PetscErrorCode KSPResetViewers(KSP);
 PETSC_EXTERN PetscErrorCode KSPDestroy(KSP*);
 PETSC_EXTERN PetscErrorCode KSPSetReusePreconditioner(KSP,PetscBool);
 PETSC_EXTERN PetscErrorCode KSPSetSkipPCSetFromOptions(KSP,PetscBool);
@@ -447,6 +448,7 @@ typedef enum {/* converged */
               KSP_DIVERGED_NANORINF            = -9,
               KSP_DIVERGED_INDEFINITE_MAT      = -10,
               KSP_DIVERGED_PC_FAILED           = -11,
+              KSP_DIVERGED_PCSETUP_FAILED PETSC_DEPRECATED_ENUM("Use KSP_DIVERGED_PC_FAILED (since v3.11)") = -11,
 
               KSP_CONVERGED_ITERATING          =  0} KSPConvergedReason;
 PETSC_EXTERN const char *const*KSPConvergedReasons;

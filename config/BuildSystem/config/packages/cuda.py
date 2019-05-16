@@ -11,17 +11,11 @@ class Configure(config.package.Package):
     self.precisions       = ['single','double']
     self.cxx              = 0
     self.complex          = 1
-    self.cudaArch         = ''
     self.CUDAVersion      = 0
     self.CUDAMinVersion   = (7, 5)
     self.hastests         = 0
     self.hastestsdatafiles= 0
     return
-
-  def __str__(self):
-    output  = config.package.Package.__str__(self)
-    output += '  Arch:     '+self.cudaArch+'\n'
-    return output
 
   def setupHelp(self, help):
     import nargs
@@ -80,8 +74,6 @@ class Configure(config.package.Package):
 
   def configureTypes(self):
     import config.setCompilers
-    if not config.setCompilers.Configure.isGNU(self.setCompilers.CC, self.log):
-      raise RuntimeError('Must use GNU compilers with CUDA')
     if not self.getDefaultPrecision() in ['double', 'single']:
       raise RuntimeError('Must use either single or double precision with CUDA')
     self.checkSizeofVoidP()
