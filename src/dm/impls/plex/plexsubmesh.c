@@ -3763,6 +3763,85 @@ PetscErrorCode DMPlexGetAuxiliaryPoint(DM dm, DM dmAux, PetscInt p, PetscInt *su
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, PetscInt filterValue, PetscInt height)
+{
+  PetscErrorCode   ierr;
+  MPI_Comm         comm, subcomm;
+  IS               reordering;
+  DMLabel          subpointMap;
+  PetscInt         tdim, gdim;
+  PetscInt         subtdim;
+  PetscInt        *stratumSizes, *stratumOffsets;
+  const PetscInt **stratumIndices;
+  IS              *stratumISes;
+  PetscInt         d;
+
+  comm = PetscObjectComm((PetscObject)dm);
+  subcomm = comm;
+  ierr = DMCreate(subcomm, subdm);CHKERRQ(ierr);
+  ierr = DMSetType(*subdm, DMPLEX);CHKERRQ(ierr);
+
+  ierr = DMGetDimension(dm, &tdim);CHKERRQ(ierr);
+  subtdim = tdim - height;
+  if (subtdim < 0) {
+    SETERRQ(comm, PETSC_ERR_PLIB, "Cannot create mesh with negative topological dimension");
+  }
+  ierr = DMSetDimension(*subdm, subtdim);CHKERRQ(ierr);
+  ierr = DMGetCoordinateDim(dm, &gdim);CHKERRQ(ierr);
+  ierr = DMSetCoordinateDim(*subdm, gdim);CHKERRQ(ierr);
+  ierr = DMLabelCreate(comm, "subpoint_map", &subpointMap);CHKERRQ(ierr);
+  ierr = DMPlexMarkSubpointMap_Closure(dm, filter, filterValue, height, subpointMap); CHKERRQ(ierr);
+
+  ierr = PetscMalloc1(subtdim+1, &stratumSizes); CHKERRQ(ierr);
+  ierr = PetscMalloc1(subtdim+1, &stratumOffsets); CHKERRQ(ierr);
+  ierr = PetscMalloc1(subtdim+1, &stratumIndices); CHKERRQ(ierr);
+  ierr = PetscMalloc1(subtdim+1, &stratumISes); CHKERRQ(ierr);
+  for (d = 0; d <= subtdim; ++d) {
+    ierr = DMLabelGetStratumSize(subpointMap, d, &stratumSizes[d]); CHKERRQ(ierr);
+    ierr = DMLabelGetStratumIS(subpointMap, d, &stratumISes[d]); CHKERRQ(ierr);
+    if (!stratumISes[d]) SETERRQ(subcomm, PETSC_ERR_PLIB, "Expecting non-null subpoint stratum IS\n");
+    ierr = ISGetIndices(stratumISes[d], &stratumIndices[d]); CHKERRQ(ierr);
+  }
+
+  stratumOffsets[subtdim] = 0;
+  if (subtdim > 0) {
+    stratumOffsets[0] = stratumOffsets[subtdim] + stratumSizes[subtdim];
+  }
+  if (subtdim > 1) {
+    stratumOffsets[subtdim - 1] = stratumOffsets[0] + stratumSizes[0];
+  }
+  if (subtdim > 2) {
+    stratumOffsets[subtdim - 2] = stratumOffsets[subtdim - 1] + stratumSizes[subtdim - 1];
+  }
+  if (subtdim > 3) {
+    SETERRQ(subcomm, PETSC_ERR_PLIB, "Only coded for max 3 dimensional DMs");
+  }
+
+  ierr = DMPlexSetSubpointMap(*subdm, subpointMap);CHKERRQ(ierr);
+  ierr = DMLabelDestroy(&subpointMap); CHKERRQ(ierr);
+
+  ierr = DMPlexSubmeshSetTopology(dm, *subdm, stratumOffsets, stratumSizes, stratumIndices); CHKERRQ(ierr);
+  ierr = DMPlexSubmeshSetCoordinates(dm, *subdm, stratumOffsets, stratumSizes, stratumIndices); CHKERRQ(ierr);
+  ierr = DMPlexSubmeshSetPointSF(dm, *subdm); CHKERRQ(ierr);
+
+  for (d = 0; d <= subtdim; d++) {
+    ierr = ISRestoreIndices(stratumISes[d], &stratumIndices[d]); CHKERRQ(ierr);
+    ierr = ISDestroy(&stratumISes[d]); CHKERRQ(ierr);
+  }
+  ierr = PetscFree(stratumSizes); CHKERRQ(ierr);
+  ierr = PetscFree(stratumOffsets); CHKERRQ(ierr);
+  ierr = PetscFree(stratumIndices); CHKERRQ(ierr);
+  ierr = PetscFree(stratumISes); CHKERRQ(ierr);
+
+  ierr = DMPlexCheckFaces(*subdm, 0, 0); CHKERRQ(ierr);
+  ierr = DMPlexCheckSymmetry(*subdm); CHKERRQ(ierr);
+  ierr = DMPlexGetOrdering(*subdm, MATORDERINGRCM, NULL, &reordering); CHKERRQ(ierr);
+
+  ierr = ISDestroy(&reordering); CHKERRQ(ierr);
+
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
                                                     PetscInt filterValue,
                                                     PetscInt height,

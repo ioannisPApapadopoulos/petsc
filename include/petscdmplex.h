@@ -236,12 +236,13 @@ PETSC_EXTERN PetscErrorCode DMPlexGetRegularRefinement(DM, PetscBool *);
 PETSC_EXTERN PetscErrorCode DMPlexSetRegularRefinement(DM, PetscBool);
 PETSC_EXTERN PetscErrorCode DMPlexRefineSimplexToTensor(DM, DM*);
 
-PETSC_EXTERN PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter, PetscInt filterValue, PetscInt height, DMLabel subpointmap);
-PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetConeSizes(DM dm, DM subdm, DMLabel subpointMap, const PetscInt *stratumOffsets, const PetscInt *stratumSizes, const PetscInt **stratumIndices);
-PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetCones(DM dm, DM subdm, const PetscInt *stratumOffsets, const PetscInt *stratumSizes, const PetscInt **stratumIndices);
-PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetTopology(DM dm, DM subdm, const PetscInt *stratumOffsets, const PetscInt *stratumSizes, const PetscInt **stratumIndices);
-PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetCoordinates(DM dm, DM subdm, const PetscInt *stratumOffsets, const PetscInt *stratumSizes, const PetscInt **stratumIndices);
-PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm);
+PETSC_EXTERN PetscErrorCode DMPlexCreateSubDMPlex(DM, DM *, DMLabel, PetscInt, PetscInt);
+PETSC_EXTERN PetscErrorCode DMPlexMarkSubpointMap_Closure(DM, DMLabel, PetscInt, PetscInt, DMLabel);
+PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetConeSizes(DM, DM, DMLabel, const PetscInt *, const PetscInt *, const PetscInt **);
+PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetCones(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
+PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetTopology(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
+PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetCoordinates(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
+PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetPointSF(DM, DM);
 
 /* Support for cell-vertex meshes */
 PETSC_EXTERN PetscErrorCode DMPlexGetNumFaceVertices(DM, PetscInt, PetscInt, PetscInt *);
