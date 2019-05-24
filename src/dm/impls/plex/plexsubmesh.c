@@ -3833,7 +3833,7 @@ PetscErrorCode DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, PetscInt 
   ierr = PetscFree(stratumIndices); CHKERRQ(ierr);
   ierr = PetscFree(stratumISes); CHKERRQ(ierr);
 
-  ierr = DMPlexCheckFaces(*subdm, 0, 0); CHKERRQ(ierr);
+  ierr = DMPlexCheckFaces(*subdm, 0); CHKERRQ(ierr);
   ierr = DMPlexCheckSymmetry(*subdm); CHKERRQ(ierr);
   ierr = DMPlexGetOrdering(*subdm, MATORDERINGRCM, NULL, &reordering); CHKERRQ(ierr);
 
