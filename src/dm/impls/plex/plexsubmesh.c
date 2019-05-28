@@ -4138,7 +4138,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm)
   ierr = DMGetPointSF(dm, &sf); CHKERRQ(ierr);
   ierr = DMGetPointSF(subdm, &subsf); CHKERRQ(ierr);
   if (subsize == 1) {
-    ierr = PetscSFSetGraph(subsf, 0, 0, NULL, PETSC_OWN_POINTER, NULL, PETSC_OWN_POINTER); CHKERRQ(ierr);
+    ierr = PetscSFSetGraph(subsf, -1, -1, NULL, PETSC_OWN_POINTER, NULL, PETSC_OWN_POINTER); CHKERRQ(ierr);
     PetscFunctionReturn(0);
   } 
   ierr = PetscSFGetGraph(sf, &nroots, &nleaves, &ilocal, &iremote); CHKERRQ(ierr);
