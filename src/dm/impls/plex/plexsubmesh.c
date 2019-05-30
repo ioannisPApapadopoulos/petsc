@@ -3799,8 +3799,9 @@ PetscErrorCode DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, PetscInt 
   for (d = 0; d <= subtdim; ++d) {
     ierr = DMLabelGetStratumSize(subpointMap, d, &stratumSizes[d]); CHKERRQ(ierr);
     ierr = DMLabelGetStratumIS(subpointMap, d, &stratumISes[d]); CHKERRQ(ierr);
-    if (!stratumISes[d]) SETERRQ(subcomm, PETSC_ERR_PLIB, "Expecting non-null subpoint stratum IS\n");
-    ierr = ISGetIndices(stratumISes[d], &stratumIndices[d]); CHKERRQ(ierr);
+    if (stratumISes[d]) { 
+        ierr = ISGetIndices(stratumISes[d], &stratumIndices[d]); CHKERRQ(ierr);
+    }
   }
 
   stratumOffsets[subtdim] = 0;
@@ -3825,7 +3826,9 @@ PetscErrorCode DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, PetscInt 
   ierr = DMPlexSubmeshSetPointSF(dm, *subdm); CHKERRQ(ierr);
 
   for (d = 0; d <= subtdim; d++) {
-    ierr = ISRestoreIndices(stratumISes[d], &stratumIndices[d]); CHKERRQ(ierr);
+    if (stratumISes[d]) { 
+        ierr = ISRestoreIndices(stratumISes[d], &stratumIndices[d]); CHKERRQ(ierr);
+    }
     ierr = ISDestroy(&stratumISes[d]); CHKERRQ(ierr);
   }
   ierr = PetscFree(stratumSizes); CHKERRQ(ierr);
