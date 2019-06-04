@@ -2,6 +2,42 @@
 #include <petsc/private/dmlabelimpl.h>   /*I      "petscdmlabel.h"   I*/
 #include <petscsf.h>
 
+PetscErrorCode DMPlexMarkSubmeshIntersection(DM dm, DMLabel label, PetscInt val, DMLabel filter, PetscInt *filterValues, PetscInt filterValueSize, PetscInt filterHeight)
+{
+  PetscInt       pStart, pEnd, p, sp, i;
+  PetscErrorCode ierr;
+  PetscInt supportSize;
+  const PetscInt *support;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm, DM_CLASSID, 1);
+  ierr = PetscSortInt(filterValueSize, filterValues);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm, filterHeight+1, &pStart, &pEnd);CHKERRQ(ierr);
+  for (p = pStart; p < pEnd; ++p) {
+    ierr = DMPlexGetSupportSize(dm, p, &supportSize);CHKERRQ(ierr);
+    if (supportSize == filterValueSize) {
+      ierr = DMPlexGetSupport(dm, p, &support);CHKERRQ(ierr);
+      PetscInt v, vs[supportSize];
+      for (i=0; i<supportSize; ++i) {
+        sp = support[i];
+        ierr = DMLabelGetValue(filter, sp, &v);CHKERRQ(ierr);
+        vs[i]=v;
+      }
+      ierr = PetscSortInt(supportSize, vs);CHKERRQ(ierr);
+      for (i=0; i<supportSize; ++i) {
+        if (vs[i] == filterValues[i]){
+            continue;
+        }
+        break;
+      }
+      if (i == supportSize) {
+        ierr = DMLabelSetValue(label, p, val);CHKERRQ(ierr);
+      }
+    }
+  }
+  PetscFunctionReturn(0);
+}
+
 static PetscErrorCode DMPlexMarkBoundaryFaces_Internal(DM dm, PetscInt val, PetscInt cellHeight, DMLabel label)
 {
   PetscInt       fStart, fEnd, f;
