@@ -4,7 +4,7 @@
 
 PetscErrorCode DMPlexMarkSubmeshIntersection(DM dm, DMLabel label, PetscInt val, DMLabel filter, PetscInt *filterValues, PetscInt filterValueSize, PetscInt filterHeight)
 {
-  PetscInt       pStart, pEnd, p, sp, i;
+  PetscInt       pStart, pEnd, p, sp, i, j;
   PetscErrorCode ierr;
   PetscInt supportSize;
   const PetscInt *support;
@@ -15,24 +15,22 @@ PetscErrorCode DMPlexMarkSubmeshIntersection(DM dm, DMLabel label, PetscInt val,
   ierr = DMPlexGetHeightStratum(dm, filterHeight+1, &pStart, &pEnd);CHKERRQ(ierr);
   for (p = pStart; p < pEnd; ++p) {
     ierr = DMPlexGetSupportSize(dm, p, &supportSize);CHKERRQ(ierr);
-    if (supportSize == filterValueSize) {
-      ierr = DMPlexGetSupport(dm, p, &support);CHKERRQ(ierr);
-      PetscInt v, vs[supportSize];
-      for (i=0; i<supportSize; ++i) {
-        sp = support[i];
-        ierr = DMLabelGetValue(filter, sp, &v);CHKERRQ(ierr);
-        vs[i]=v;
+    ierr = DMPlexGetSupport(dm, p, &support);CHKERRQ(ierr);
+    PetscInt v, vs[supportSize];
+    for (i=0; i<supportSize; ++i) {
+      sp = support[i];
+      ierr = DMLabelGetValue(filter, sp, &v);CHKERRQ(ierr);
+      vs[i]=v;
+    }
+    ierr = PetscSortInt(supportSize, vs);CHKERRQ(ierr);
+    j=0;
+    for (i=0; i<filterValueSize; ++i) {
+      while (j<supportSize && vs[j] != filterValues[i]) {
+        ++j;
       }
-      ierr = PetscSortInt(supportSize, vs);CHKERRQ(ierr);
-      for (i=0; i<supportSize; ++i) {
-        if (vs[i] == filterValues[i]){
-            continue;
-        }
-        break;
-      }
-      if (i == supportSize) {
-        ierr = DMLabelSetValue(label, p, val);CHKERRQ(ierr);
-      }
+    }
+    if (j < supportSize) {
+      ierr = DMLabelSetValue(label, p, val);CHKERRQ(ierr);
     }
   }
   PetscFunctionReturn(0);
