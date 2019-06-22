@@ -4159,6 +4159,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm)
 
   PetscHMapICreate(&pointmap);
   for (p = 0; p < nsubpoints; p++) {
+    printf("rank = %d: (subpoints[p], p) = (%d, %d)\n", rank, subpoints[p], p);
     PetscHMapISet(pointmap, subpoints[p], p);
   }
   ierr = ISRestoreIndices(subpointIS, &subpoints); CHKERRQ(ierr);
@@ -4169,11 +4170,14 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm)
   ierr = PetscMalloc1(nroots, &mappedRemoteRoots); CHKERRQ(ierr);
 
   nsubleaves = 0;
+  printf("rank = %d: nleaves = %d\n", rank, nleaves);
   for (p = 0; p < nleaves; ++p) {
     PetscHMapIGet(pointmap, ilocal[p], &subpoint);
+    printf("rank = %d: (ilocal[p], subpoint) = (%d, %d)\n", rank, ilocal[p], &subpoint);
     if (subpoint < 0) continue;
     ++nsubleaves;
   }
+  printf("rank = %d: nsubleaves = %d\n", rank, nsubleaves);
   for (p = pStart; p < pEnd; ++p) {
     mappedRemoteRoots[p-pStart] = -1;
     PetscHMapIGet(pointmap, p, &subpoint);
