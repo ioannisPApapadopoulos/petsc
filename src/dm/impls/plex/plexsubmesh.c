@@ -4173,7 +4173,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm)
   printf("rank = %d: nleaves = %d\n", rank, nleaves);
   for (p = 0; p < nleaves; ++p) {
     PetscHMapIGet(pointmap, ilocal[p], &subpoint);
-    printf("rank = %d: (ilocal[p], subpoint) = (%d, %d)\n", rank, ilocal[p], &subpoint);
+    printf("rank = %d: (ilocal[p], subpoint) = (%d, %d)\n", rank, ilocal[p], subpoint);
     if (subpoint < 0) continue;
     ++nsubleaves;
   }
