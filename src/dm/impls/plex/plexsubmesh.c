@@ -4157,6 +4157,23 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm)
 
   if (nsubpoints != (subEnd - subStart)) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Subpoint IS does not cover complete chart");
 
+
+  /* debuging... */
+  IS        globalPointNumbers;
+  PetscInt *ixs;
+  ierr = DMPlexCreatePointNumbering(dm, &globalPointNumbers);CHKERRQ(ierr);
+  ierr = ISGetIndices(globalPointNumbers, &ixs);CHKERRQ(ierr);
+  for (p = 0; p < nleaves; ++p) {
+    printf("rank = %d, (localnum, globalnum) = (%d, %d) (leaves)\n", rank, ilocal[p], ixs[ilocal[p]]);
+  }
+  for (p = pStart; p < pEnd; ++p) {
+    printf("rank = %d, (localnum, globalnum) = (%d, %d) (leaves)\n", rank, p, ixs[p]);
+  }
+  ierr = ISRestoreIndices(globalPointNumbers, &ixs);CHKERRQ(ierr);
+  ierr = ISDestroy(&globalPointNumbers);CHKERRQ(ierr);
+  /* debuggin...end*/
+
+
   PetscHMapICreate(&pointmap);
   for (p = 0; p < nsubpoints; p++) {
     printf("rank = %d: (subpoints[p], p) = (%d, %d)\n", rank, subpoints[p], p);
