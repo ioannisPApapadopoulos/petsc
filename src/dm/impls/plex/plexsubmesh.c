@@ -3850,11 +3850,17 @@ PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
                                                     PetscInt height,
                                                     DMLabel subpointmap)
 {
-  PetscErrorCode  ierr;
-  IS              marked;
-  const PetscInt *points;
-  PetscInt       *closure = NULL, *pStart, *pEnd;
-  PetscInt        p, npoints, hStart, hEnd, tdim, d;
+  PetscErrorCode     ierr;
+  IS                 marked;
+  const PetscInt    *points;
+  PetscInt          *closure = NULL, *pStart, *pEnd;
+  PetscInt           p, npoints, hStart, hEnd, tdim, d;
+  PetscSF            sf;
+  PetscInt           nroots, nleaves;
+  const PetscInt    *ilocal;
+  const PetscSFNode *iremote;
+  PetscHMapI         pointmap;
+  PetscBool          areAllLeaves;
 
   PetscFunctionBegin;
 
@@ -3867,6 +3873,35 @@ PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
   ierr = DMPlexGetHeightStratum(dm, height, &hStart, &hEnd); CHKERRQ(ierr);
   ierr = ISGetLocalSize(marked, &npoints); CHKERRQ(ierr);
   ierr = ISGetIndices(marked, &points); CHKERRQ(ierr);
+
+  ierr = DMGetPointSF(dm, &sf); CHKERRQ(ierr);
+  ierr = PetscSFGetGraph(sf, &nroots, &nleaves, &ilocal, &iremote); CHKERRQ(ierr);
+
+  PetscHMapICreate(&pointmap);
+  for (p = 0; p < nleaves; ++p) {
+    PetscHMapISet(pointmap, ilocal[p], p);
+  }
+  areAllLeaves = PETSC_TRUE;
+  for (p = 0; p < npoints; ++p) {
+    const PetscInt point = points[p];
+    PetscInt       closureSize, ci;
+    if (point < hStart || point >= hEnd) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Filter label marks a point at the incorrect height");
+    ierr = DMPlexGetTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
+    for (ci = 0; ci < closureSize; ++ci) {
+      const PetscInt subpoint = closure[2*ci];
+      const PetscInt subpointLocal;
+      PetscHMapIGet(pointmap, subpoint, &subpointLocal);
+      if (subpointLocal < 0) {
+        areAllLeaves = PETSC_FALSE;
+      }
+    }
+    ierr = DMPlexRestoreTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
+  }
+  PetscHMapIDestroy(&pointmap);
+
+  if (areAllLeaves) {
+    PetscFunctionReturn(0);
+  }
 
   ierr = DMGetDimension(dm, &tdim); CHKERRQ(ierr);
   ierr = PetscMalloc1(tdim+1, &pStart); CHKERRQ(ierr);
