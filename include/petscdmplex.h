@@ -242,7 +242,7 @@ PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetConeSizes(DM, DM, DMLabel, const Pet
 PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetCones(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
 PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetTopology(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
 PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetCoordinates(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
-PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetPointSF(DM, DM);
+PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetPointSF(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
 
 /* Support for cell-vertex meshes */
 PETSC_EXTERN PetscErrorCode DMPlexGetNumFaceVertices(DM, PetscInt, PetscInt, PetscInt *);
