@@ -4195,7 +4195,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
   ierr = DMPlexCreatePointNumbering(dm, &globalPointNumbers);CHKERRQ(ierr);
   ierr = ISGetIndices(globalPointNumbers, &ixs);CHKERRQ(ierr);
   for (p = pStart; p < pEnd; ++p) {
-    printf("rank = %d, (localnum, globalnum) = (%d, %d)\n", rank, p, ixs[p]);
+//printf("rank = %d, (localnum, globalnum) = (%d, %d)\n", rank, p, ixs[p]);
   }
   ierr = ISRestoreIndices(globalPointNumbers, &ixs);CHKERRQ(ierr);
   ierr = ISDestroy(&globalPointNumbers);CHKERRQ(ierr);
@@ -4203,7 +4203,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
 
   PetscHMapICreate(&leafpointmap);
   for (p = 0; p < nleaves; ++p) {
-printf("rank=%d, ilocal[p]=%d, p=%d\n",rank,ilocal[p], p);
+//printf("rank=%d, ilocal[p]=%d, p=%d\n",rank,ilocal[p], p);
     PetscHMapISet(leafpointmap, ilocal[p], p);
   }
 
@@ -4220,7 +4220,7 @@ printf("rank=%d, ilocal[p]=%d, p=%d\n",rank,ilocal[p], p);
     point = stratumIndices[subtdim][p];
     PetscInt leafpoint;
     PetscHMapIGet(leafpointmap, point, &leafpoint);
-printf("rank=%d, stratumSizes[subtdim]=%d, stratumIndices[subtdim][p]=%d, leafpoint=%d\n",rank, stratumSizes[subtdim], stratumIndices[subtdim][p],leafpoint);
+//printf("rank=%d, stratumSizes[subtdim]=%d, stratumIndices[subtdim][p]=%d, leafpoint=%d\n",rank, stratumSizes[subtdim], stratumIndices[subtdim][p],leafpoint);
     if (leafpoint < 0) {
       PetscInt       closureSize, ci;
       PetscInt      *closure = NULL;
@@ -4229,9 +4229,9 @@ printf("rank=%d, stratumSizes[subtdim]=%d, stratumIndices[subtdim][p]=%d, leafpo
         const PetscInt closurePoint = closure[2*ci];
         PetscInt subClosurePoint;
         PetscHMapIGet(leafpointmap, closurePoint, &subClosurePoint);
-printf("rank=%d, closureSize=%d, closurePoint=%d, subClosurePoint=%d\n",rank,closureSize,closurePoint,subClosurePoint);
+//printf("rank=%d, closureSize=%d, closurePoint=%d, subClosurePoint=%d\n",rank,closureSize,closurePoint,subClosurePoint);
         if (subClosurePoint >= 0) {
-printf("+rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
+//printf("+rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
           updatedOwnersLocal[closurePoint] = rank;
         }
       }
@@ -4256,7 +4256,7 @@ printf("+rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
         PetscInt subClosurePoint;
         PetscHMapIGet(leafpointmap, closurePoint, &subClosurePoint);
         if (subClosurePoint < 0) {
-printf("-rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
+//printf("-rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
           updatedOwnersReduced[closurePoint] = rank;
           updatedOwners[closurePoint] = rank;
         }
@@ -4267,13 +4267,13 @@ printf("-rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
   PetscHMapIDestroy(&leafpointmap);
 for (p=pStart; p<pEnd; ++p)
 {
-  printf("rank = %d, pval=%d, (updatedOwnersReduced, updatedOwners) = (%d, %d)\n", rank, p, updatedOwnersReduced[p-pStart], updatedOwners[p-pStart]);
+//  printf("rank = %d, pval=%d, (updatedOwnersReduced, updatedOwners) = (%d, %d)\n", rank, p, updatedOwnersReduced[p-pStart], updatedOwners[p-pStart]);
 }
   ierr = PetscSFBcastBegin(sf, MPIU_INT, updatedOwnersReduced, updatedOwners); CHKERRQ(ierr);
   ierr = PetscSFBcastEnd(sf, MPIU_INT, updatedOwnersReduced, updatedOwners); CHKERRQ(ierr);
 for (p=pStart; p<pEnd; ++p)
 {
-  printf("rank = %d, pval=%d, (updatedOwnersReduced, updatedOwners) = (%d, %d)\n", rank, p, updatedOwnersReduced[p-pStart], updatedOwners[p-pStart]);
+//  printf("rank = %d, pval=%d, (updatedOwnersReduced, updatedOwners) = (%d, %d)\n", rank, p, updatedOwnersReduced[p-pStart], updatedOwners[p-pStart]);
 }
 
 
@@ -4344,7 +4344,7 @@ for (p=pStart; p<pEnd; ++p)
   nsubleaves = 0;
   for (p = 0; p < nleaves; ++p) {
     PetscHMapIGet(pointmap, ilocal[p], &subpoint);
-    printf("rank=%d, newowner=%d, subpoint=%d\n",rank,updatedOwners[ilocal[p]], subpoint);
+//    printf("rank=%d, newowner=%d, subpoint=%d\n",rank,updatedOwners[ilocal[p]], subpoint);
     if ((subpoint < 0) || (updatedOwners[ilocal[p]] == rank)) continue;
     ++nsubleaves;
   }
@@ -4357,7 +4357,7 @@ for (p=pStart; p<pEnd; ++p)
     subilocal[idx] = subpoint;
     subiremote[idx].rank = updatedOwners[ilocal[p]];
     subiremote[idx].index = updatedIndices[ilocal[p]];
-    printf("%d, nsubleaves=%d, %d, %d\n", rank, nsubleaves, subiremote[idx].rank, subiremote[idx].index);
+//    printf("%d, nsubleaves=%d, %d, %d\n", rank, nsubleaves, subiremote[idx].rank, subiremote[idx].index);
     if (subiremote[idx].rank < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid remote rank");
     if (subiremote[idx].index < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid remote subpoint");
     ++idx;
