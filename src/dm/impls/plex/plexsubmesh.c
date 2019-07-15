@@ -4203,6 +4203,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
 
   PetscHMapICreate(&leafpointmap);
   for (p = 0; p < nleaves; ++p) {
+printf("rank=%d, ilocal[p]=%d, p=%d\n",rank,ilocal[p], p);
     PetscHMapISet(leafpointmap, ilocal[p], p);
   }
 
@@ -4219,6 +4220,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
     point = stratumIndices[subtdim][p];
     PetscInt leafpoint;
     PetscHMapIGet(leafpointmap, point, &leafpoint);
+printf("rank=%d, stratumSizes[subtdim]=%d, stratumIndices[subtdim][p]=%d, leafpoint=%d\n",rank, stratumSizes[subtdim], stratumIndices[subtdim][p],leafpoint);
     if (leafpoint < 0) {
       PetscInt       closureSize, ci;
       PetscInt      *closure = NULL;
@@ -4227,6 +4229,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
         const PetscInt closurePoint = closure[2*ci];
         PetscInt subClosurePoint;
         PetscHMapIGet(leafpointmap, closurePoint, &subClosurePoint);
+printf("rank=%d, closureSize=%d, closurePoint=%d, subClosurePoint=%d\n",rank,closureSize,closurePoint,subClosurePoint);
         if (subClosurePoint >= 0) {
 printf("+rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
           updatedOwnersLocal[closurePoint] = rank;
