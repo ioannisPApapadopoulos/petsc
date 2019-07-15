@@ -4228,6 +4228,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
         PetscInt subClosurePoint;
         PetscHMapIGet(leafpointmap, closurePoint, &subClosurePoint);
         if (subClosurePoint >= 0) {
+printf("+rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
           updatedOwnersLocal[closurePoint] = rank;
         }
       }
@@ -4252,6 +4253,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
         PetscInt subClosurePoint;
         PetscHMapIGet(leafpointmap, closurePoint, &subClosurePoint);
         if (subClosurePoint < 0) {
+printf("-rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
           updatedOwnersReduced[closurePoint] = rank;
           updatedOwners[closurePoint] = rank;
         }
@@ -4260,9 +4262,20 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
     }
   }
   PetscHMapIDestroy(&leafpointmap);
+for (p=pStart; p<pEnd; ++p)
+{
+  printf("rank = %d, pval=%d, (updatedOwnersReduced, updatedOwners) = (%d, %d)\n", rank, p, updatedOwnersReduced[p-pStart], updatedOwners[p-pStart]);
+}
   ierr = PetscSFBcastBegin(sf, MPIU_INT, updatedOwnersReduced, updatedOwners); CHKERRQ(ierr);
   ierr = PetscSFBcastEnd(sf, MPIU_INT, updatedOwnersReduced, updatedOwners); CHKERRQ(ierr);
+for (p=pStart; p<pEnd; ++p)
+{
+  printf("rank = %d, pval=%d, (updatedOwnersReduced, updatedOwners) = (%d, %d)\n", rank, p, updatedOwnersReduced[p-pStart], updatedOwners[p-pStart]);
+}
+
+
   ierr = PetscFree(updatedOwnersReduced); CHKERRQ(ierr);
+
 
   /* broadcast new remote subdm indices including ones on new owners */
   ierr = PetscMalloc1(nroots, &updatedIndicesLocal); CHKERRQ(ierr);
