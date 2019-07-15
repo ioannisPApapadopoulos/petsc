@@ -3876,7 +3876,7 @@ PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
 
   ierr = DMGetPointSF(dm, &sf); CHKERRQ(ierr);
   ierr = PetscSFGetGraph(sf, &nroots, &nleaves, &ilocal, &iremote); CHKERRQ(ierr);
-/*
+
   PetscHMapICreate(&pointmap);
   for (p = 0; p < nleaves; ++p) {
     PetscHMapISet(pointmap, ilocal[p], p);
@@ -3895,7 +3895,7 @@ PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
     PetscFunctionReturn(0);
   }
   PetscHMapIDestroy(&pointmap);
-*/
+
   ierr = DMGetDimension(dm, &tdim); CHKERRQ(ierr);
   ierr = PetscMalloc1(tdim+1, &pStart); CHKERRQ(ierr);
   ierr = PetscMalloc1(tdim+1, &pEnd); CHKERRQ(ierr);
@@ -4344,7 +4344,7 @@ for (p=pStart; p<pEnd; ++p)
   nsubleaves = 0;
   for (p = 0; p < nleaves; ++p) {
     PetscHMapIGet(pointmap, ilocal[p], &subpoint);
-    printf("rank=%d, newowner=%d\n",rank,updatedOwners[ilocal[p]]);
+    printf("rank=%d, newowner=%d, subpoint=%d\n",rank,updatedOwners[ilocal[p]], subpoint);
     if ((subpoint < 0) || (updatedOwners[ilocal[p]] == rank)) continue;
     ++nsubleaves;
   }
