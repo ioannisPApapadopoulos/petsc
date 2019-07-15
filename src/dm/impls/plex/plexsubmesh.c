@@ -4305,10 +4305,12 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
   ierr = PetscFree(updatedIndicesReduced); CHKERRQ(ierr);
 
   /* set subsf */
-  nsubleaves = 0;
+/*  nsubleaves = 0;
   for (p = 0; p < nsubpoints; ++p) {
     if (updatedOwners[subpoints[p]] != rank) ++nsubleaves;
   }
+
+
 
   ierr = PetscMalloc1(nsubleaves, &subilocal); CHKERRQ(ierr);
   ierr = PetscMalloc1(nsubleaves, &subiremote); CHKERRQ(ierr);
@@ -4322,7 +4324,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
       ++idx;
     }
   }
-/*
+*/
   nsubleaves = 0;
   for (p = 0; p < nleaves; ++p) {
     PetscHMapIGet(pointmap, ilocal[p], &subpoint);
@@ -4343,7 +4345,7 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
     if (subiremote[idx].rank < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid remote rank");
     if (subiremote[idx].index < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid remote subpoint");
     ++idx;
-  }*/
+  }
 
   ierr = ISRestoreIndices(subpointIS, &subpoints); CHKERRQ(ierr);
   ierr = ISDestroy(&subpointIS); CHKERRQ(ierr);
