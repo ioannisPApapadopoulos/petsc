@@ -2311,6 +2311,44 @@ PetscErrorCode PetscSFCreateRemoteOffsets(PetscSF sf, PetscSection rootSection, 
 }
 
 /*@C
+  PetscSFCreateSectionMigrationSF - Create an SF for migrating between two sections that describe the same data with a different layout.
+
+  Input Parameters:
++ sf - The SF describing the migration between section points.
+. old - Section for data layout of points for outgoing data (roots of sf), may be NULL in which case an empty local Section is faked.
+- new - Section for data layout of points for incoming data (leaves of sf)
+
+  Output Parameters:
+- migrationSF - The new SF encoding a migration between the two sections.
+
+  Level: Advanced
+
+.seealso: PetscSFCreate(), PetscSFCreateSectionSF(), PetscSFCreateRemoteOffsets()
+@*/
+PetscErrorCode PetscSFCreateSectionMigrationSF(PetscSF pointMigrationSF,
+                                               PetscSection old,
+                                               PetscSection new,
+                                               PetscSF *sectionMigrationSF)
+{
+  PetscErrorCode ierr;
+  PetscInt *remoteOffsets = NULL;
+
+  PetscFunctionBegin;
+
+  if (!old) {
+    ierr = PetscSectionCreate(PETSC_COMM_SELF, &old);CHKERRQ(ierr);
+    ierr = PetscSectionSetChart(old, 0, 0);CHKERRQ(ierr);
+    ierr = PetscSectionSetUp(old);CHKERRQ(ierr);
+  } else {
+    ierr = PetscObjectReference((PetscObject)old);CHKERRQ(ierr);
+  }
+  ierr = PetscSFCreateRemoteOffsets(pointMigrationSF, old, new, &remoteOffsets);CHKERRQ(ierr);
+  ierr = PetscSFCreateSectionSF(pointMigrationSF, old, remoteOffsets, new, sectionMigrationSF);CHKERRQ(ierr);
+  ierr = PetscFree(remoteOffsets);CHKERRQ(ierr);
+  ierr = PetscSectionDestroy(&old);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+/*@C
   PetscSFCreateSectionSF - Create an expanded SF of dofs, assuming the input SF relates points
 
   Input Parameters:
