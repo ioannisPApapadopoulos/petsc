@@ -84,6 +84,7 @@ PETSC_STATIC_INLINE PetscErrorCode PetscSFViewFromOptions(PetscSF A,PetscObject 
 PETSC_EXTERN PetscErrorCode PetscSFSetUp(PetscSF);
 PETSC_EXTERN PetscErrorCode PetscSFSetFromOptions(PetscSF);
 PETSC_EXTERN PetscErrorCode PetscSFDuplicate(PetscSF,PetscSFDuplicateOption,PetscSF*);
+PETSC_EXTERN PetscErrorCode PetscSFCopyToComm(PetscSF,MPI_Comm,PetscSF*);
 PETSC_EXTERN PetscErrorCode PetscSFWindowSetSyncType(PetscSF,PetscSFWindowSyncType);
 PETSC_EXTERN PetscErrorCode PetscSFWindowGetSyncType(PetscSF,PetscSFWindowSyncType*);
 PETSC_EXTERN PetscErrorCode PetscSFSetRankOrder(PetscSF,PetscBool);
