@@ -1684,7 +1684,7 @@ PetscErrorCode PetscSFCompose(PetscSF sfA,PetscSF sfB,PetscSF *sfBA)
   const PetscSFNode *remotePointsA,*remotePointsB;
   PetscSFNode       *remotePointsBA,*reorderedRemotePointsA = NULL;
   const PetscInt    *localPointsA,*localPointsB;
-  PetscInt          numRootsA,numLeavesA,numRootsB,numLeavesB,minleaf,maxleaf;
+  PetscInt          i,numRootsA,numLeavesA,numRootsB,numLeavesB,minleaf,maxleaf;
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(sfA,PETSCSF_CLASSID,1);
@@ -1700,14 +1700,8 @@ PetscErrorCode PetscSFCompose(PetscSF sfA,PetscSF sfB,PetscSF *sfBA)
   if (numRootsB != numLeavesA) SETERRQ(comm,PETSC_ERR_ARG_INCOMP,"The second SF's number of roots must be equal to the first SF's number of leaves");
   if (localPointsA) {
     /* Local space is dense permutation of identity. Need to rewire order of the remote points */
-    PetscSFNode work;
-    PetscInt *reorderedLocalPointsA;
-    ierr = PetscMalloc1(numLeavesA,&reorderedLocalPointsA);CHKERRQ(ierr);
     ierr = PetscMalloc1(numLeavesA,&reorderedRemotePointsA);CHKERRQ(ierr);
-    ierr = PetscMemcpy(reorderedLocalPointsA,localPointsA,sizeof(*localPointsA)*numLeavesA);CHKERRQ(ierr);
-    ierr = PetscMemcpy(reorderedRemotePointsA,remotePointsA,sizeof(*remotePointsA)*numLeavesA);CHKERRQ(ierr);
-    ierr = PetscSortIntWithDataArray(numLeavesA,reorderedLocalPointsA,reorderedRemotePointsA,sizeof(*reorderedRemotePointsA),&work);CHKERRQ(ierr);
-    ierr = PetscFree(reorderedLocalPointsA);CHKERRQ(ierr);
+    for (i=0; i<numLeavesA; i++) reorderedRemotePointsA[localPointsA[i]-minleaf] = remotePointsA[i];
     remotePointsA = reorderedRemotePointsA;
   }
   ierr = PetscMalloc1(numLeavesB,&remotePointsBA);CHKERRQ(ierr);
