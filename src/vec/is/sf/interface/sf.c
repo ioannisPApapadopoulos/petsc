@@ -1683,7 +1683,7 @@ PetscErrorCode PetscSFCompose(PetscSF sfA,PetscSF sfB,PetscSF *sfBA)
   MPI_Comm          comm;
   const PetscSFNode *remotePointsA,*remotePointsB;
   PetscSFNode       *remotePointsBA=NULL,*reorderedRemotePointsA = NULL,*leafdataB;
-  const PetscInt    *localPointsA,*localPointsB;
+  const PetscInt    *localPointsA,*localPointsB,*localPointsBA;
   PetscInt          i,numRootsA,numLeavesA,numRootsB,numLeavesB,minleaf,maxleaf;
 
   PetscFunctionBegin;
@@ -1708,16 +1708,19 @@ PetscErrorCode PetscSFCompose(PetscSF sfA,PetscSF sfB,PetscSF *sfBA)
   ierr = PetscMalloc1(maxleaf-minleaf+1,&leafdataB);CHKERRQ(ierr);
   ierr = PetscSFBcastBegin(sfB,MPIU_2INT,remotePointsA,leafdataB-minleaf);CHKERRQ(ierr);
   ierr = PetscSFBcastEnd(sfB,MPIU_2INT,remotePointsA,leafdataB-minleaf);CHKERRQ(ierr);
-  if (localPointsB) { /* Local space of sfB is not identity */
+  ierr = PetscFree(reorderedRemotePointsA);CHKERRQ(ierr);
+
+  if (minleaf == 0 && maxleaf + 1 == numLeavesB) { /* Local space of sfB is an identity or permutation */
+    localPointsBA  = NULL;
+    remotePointsBA = leafdataB;
+  } else {
+    localPointsBA  = localPointsB;
     ierr = PetscMalloc1(numLeavesB,&remotePointsBA);CHKERRQ(ierr);
     for (i=0; i<numLeavesB; i++) remotePointsBA[i] = leafdataB[localPointsB[i]-minleaf];
     ierr = PetscFree(leafdataB);CHKERRQ(ierr);
-  } else {
-    remotePointsBA = leafdataB;
   }
-  ierr = PetscFree(reorderedRemotePointsA);CHKERRQ(ierr);
   ierr = PetscSFCreate(comm, sfBA);CHKERRQ(ierr);
-  ierr = PetscSFSetGraph(*sfBA,numRootsA,numLeavesB,localPointsB,PETSC_COPY_VALUES,remotePointsBA,PETSC_OWN_POINTER);CHKERRQ(ierr);
+  ierr = PetscSFSetGraph(*sfBA,numRootsA,numLeavesB,localPointsBA,PETSC_COPY_VALUES,remotePointsBA,PETSC_OWN_POINTER);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
