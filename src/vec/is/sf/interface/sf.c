@@ -1682,7 +1682,7 @@ PetscErrorCode PetscSFCompose(PetscSF sfA,PetscSF sfB,PetscSF *sfBA)
   PetscErrorCode    ierr;
   MPI_Comm          comm;
   const PetscSFNode *remotePointsA,*remotePointsB;
-  PetscSFNode       *remotePointsBA;
+  PetscSFNode       *remotePointsBA,*reorderedRemotePointsA = NULL;
   const PetscInt    *localPointsA,*localPointsB;
   PetscInt          numRootsA,numLeavesA,numRootsB,numLeavesB,minleaf,maxleaf;
 
@@ -1698,9 +1698,22 @@ PetscErrorCode PetscSFCompose(PetscSF sfA,PetscSF sfB,PetscSF *sfBA)
   ierr = PetscSFGetLeafRange(sfA,&minleaf,&maxleaf);CHKERRQ(ierr);
   if (maxleaf+1-minleaf != numLeavesA) SETERRQ(comm,PETSC_ERR_ARG_INCOMP,"The first SF can not have sparse local space");
   if (numRootsB != numLeavesA) SETERRQ(comm,PETSC_ERR_ARG_INCOMP,"The second SF's number of roots must be equal to the first SF's number of leaves");
+  if (localPointsA) {
+    /* Local space is dense permutation of identity. Need to rewire order of the remote points */
+    PetscSFNode work;
+    PetscInt *reorderedLocalPointsA;
+    ierr = PetscMalloc1(numLeavesA,&reorderedLocalPointsA);CHKERRQ(ierr);
+    ierr = PetscMalloc1(numLeavesA,&reorderedRemotePointsA);CHKERRQ(ierr);
+    ierr = PetscMemcpy(reorderedLocalPointsA,localPointsA,sizeof(*localPointsA)*numLeavesA);CHKERRQ(ierr);
+    ierr = PetscMemcpy(reorderedRemotePointsA,remotePointsA,sizeof(*remotePointsA)*numLeavesA);CHKERRQ(ierr);
+    ierr = PetscSortIntWithDataArray(numLeavesA,reorderedLocalPointsA,reorderedRemotePointsA,sizeof(*reorderedRemotePointsA),&work);CHKERRQ(ierr);
+    ierr = PetscFree(reorderedLocalPointsA);CHKERRQ(ierr);
+    remotePointsA = reorderedRemotePointsA;
+  }
   ierr = PetscMalloc1(numLeavesB,&remotePointsBA);CHKERRQ(ierr);
   ierr = PetscSFBcastBegin(sfB,MPIU_2INT,remotePointsA,remotePointsBA);CHKERRQ(ierr);
   ierr = PetscSFBcastEnd(sfB,MPIU_2INT,remotePointsA,remotePointsBA);CHKERRQ(ierr);
+  ierr = PetscFree(reorderedRemotePointsA);CHKERRQ(ierr);
   ierr = PetscSFCreate(comm, sfBA);CHKERRQ(ierr);
   ierr = PetscSFSetGraph(*sfBA,numRootsA,numLeavesB,localPointsB,PETSC_COPY_VALUES,remotePointsBA,PETSC_OWN_POINTER);CHKERRQ(ierr);
   PetscFunctionReturn(0);
