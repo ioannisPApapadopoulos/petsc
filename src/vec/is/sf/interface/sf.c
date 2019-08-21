@@ -1696,7 +1696,7 @@ PetscErrorCode PetscSFCompose(PetscSF sfA,PetscSF sfB,PetscSF *sfBA)
   ierr = PetscSFGetGraph(sfA,&numRootsA,&numLeavesA,&localPointsA,&remotePointsA);CHKERRQ(ierr);
   ierr = PetscSFGetGraph(sfB,&numRootsB,&numLeavesB,&localPointsB,&remotePointsB);CHKERRQ(ierr);
   ierr = PetscSFGetLeafRange(sfA,&minleaf,&maxleaf);CHKERRQ(ierr);
-  if (maxleaf+1-minleaf != numLeavesA) SETERRQ(comm,PETSC_ERR_ARG_INCOMP,"The first SF can not have sparse local space");
+  if (maxleaf+1 != numLeavesA || minleaf) SETERRQ(comm,PETSC_ERR_ARG_INCOMP,"The first SF can not have sparse local space");
   if (numRootsB != numLeavesA) SETERRQ(comm,PETSC_ERR_ARG_INCOMP,"The second SF's number of roots must be equal to the first SF's number of leaves");
   if (localPointsA) {
     /* Local space is dense permutation of identity. Need to rewire order of the remote points */
