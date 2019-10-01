@@ -3910,8 +3910,8 @@ PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
         }
       }
     }
+    ierr = DMPlexRestoreTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
   }
-  ierr = DMPlexRestoreTransitiveClosure(dm, 0, PETSC_TRUE, NULL, &closure); CHKERRQ(ierr);
   ierr = ISRestoreIndices(marked, &points); CHKERRQ(ierr);
   ierr = ISDestroy(&marked); CHKERRQ(ierr);
   ierr = PetscFree(pStart); CHKERRQ(ierr);
@@ -4015,7 +4015,7 @@ PetscErrorCode DMPlexSubmeshSetTopology(DM dm, DM subdm,
     ierr = DMGetDimension(subdm, &subtdim); CHKERRQ(ierr);
     ierr = DMPlexGetSubpointMap(subdm, &subpointMap); CHKERRQ(ierr);
 
-    for (d = 0; d <= subtdim; d++ ) {
+    for (d = 0; d <= subtdim; ++d) {
         chart += stratumSizes[d];
     }
     ierr = DMPlexSetChart(subdm, 0, chart); CHKERRQ(ierr);
@@ -4148,13 +4148,10 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
   const PetscSFNode *iremote;
   PetscSFNode       *subiremote;
   PetscInt          *subilocal;
-  PetscHMapI         pointmap, leafpointmap;
   MPI_Comm           comm, subcomm;
   PetscInt           subtdim;
-  PetscInt          *updatedOwnersLocal;
   PetscInt          *updatedOwnersReduced;
   PetscInt          *updatedOwners;
-  PetscInt          *updatedIndicesLocal;
   PetscInt          *updatedIndicesReduced;
   PetscInt          *updatedIndices;
 
@@ -4183,6 +4180,12 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
   ierr = DMPlexGetChart(subdm, &subStart, &subEnd); CHKERRQ(ierr);
   ierr = DMGetDimension(subdm, &subtdim); CHKERRQ(ierr);
 
+  ierr = DMPlexCreateSubpointIS(subdm, &subpointIS); CHKERRQ(ierr);
+  if (!subpointIS) SETERRQ(comm, PETSC_ERR_PLIB, "Need subpoint IS!");
+  ierr = ISGetIndices(subpointIS, &subpoints); CHKERRQ(ierr);
+  ierr = ISGetLocalSize(subpointIS, &nsubpoints); CHKERRQ(ierr);
+  if (nsubpoints != (subEnd - subStart)) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Subpoint IS does not cover complete chart");
+
   /* debuging... */
   IS        globalPointNumbers;
   const PetscInt *ixs;
@@ -4195,70 +4198,23 @@ PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
   ierr = ISDestroy(&globalPointNumbers);CHKERRQ(ierr);
   /* debuggin...end*/
 
-  PetscHMapICreate(&leafpointmap);
-  for (p = 0; p < nleaves; ++p) {
-//printf("rank=%d, ilocal[p]=%d, p=%d\n",rank,ilocal[p], p);
-    PetscHMapISet(leafpointmap, ilocal[p], p);
-  }
-
   /* update owners */
-  ierr = PetscMalloc1(nroots, &updatedOwnersLocal); CHKERRQ(ierr);
   ierr = PetscMalloc1(nroots, &updatedOwnersReduced); CHKERRQ(ierr);
   ierr = PetscMalloc1(nroots, &updatedOwners); CHKERRQ(ierr);
   for (p = pStart; p < pEnd; ++p) {
-    updatedOwnersLocal[p-pStart] = -1;
     updatedOwnersReduced[p-pStart] = -1;
     updatedOwners[p-pStart] = -1;
   }
-  for (p = 0; p < stratumSizes[subtdim]; ++p) {
-    point = stratumIndices[subtdim][p];
-    PetscInt leafpoint;
-    PetscHMapIGet(leafpointmap, point, &leafpoint);
-//printf("rank=%d, stratumSizes[subtdim]=%d, stratumIndices[subtdim][p]=%d, leafpoint=%d\n",rank, stratumSizes[subtdim], stratumIndices[subtdim][p],leafpoint);
-    if (leafpoint < 0) {
-      PetscInt       closureSize, ci;
-      PetscInt      *closure = NULL;
-      ierr = DMPlexGetTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
-      for (ci = 0; ci < closureSize; ++ci) {
-        const PetscInt closurePoint = closure[2*ci];
-        PetscInt subClosurePoint;
-        PetscHMapIGet(leafpointmap, closurePoint, &subClosurePoint);
-//printf("rank=%d, closureSize=%d, closurePoint=%d, subClosurePoint=%d\n",rank,closureSize,closurePoint,subClosurePoint);
-        if (subClosurePoint >= 0) {
-//printf("+rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
-          updatedOwnersLocal[closurePoint] = rank;
-        }
-      }
-      ierr = DMPlexRestoreTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
-    }
+  for (p = 0; p < nsubpoints; ++p) {
+    updatedOwners[subpoints[p]] = rank;
   }
-  ierr = PetscSFReduceBegin(sf, MPIU_INT, updatedOwnersLocal, updatedOwnersReduced, MPI_MAX); CHKERRQ(ierr);
-  ierr = PetscSFReduceEnd(sf, MPIU_INT, updatedOwnersLocal, updatedOwnersReduced, MPI_MAX); CHKERRQ(ierr);
-  ierr = PetscFree(updatedOwnersLocal); CHKERRQ(ierr);
-
-  /* do not transfer ownership if unnessesary */
-  for (p = 0; p < stratumSizes[subtdim]; ++p) {
-    point = stratumIndices[subtdim][p];
-    PetscInt leafpoint;
-    PetscHMapIGet(leafpointmap, point, &leafpoint);
-    if (leafpoint < 0) {
-      PetscInt       closureSize, ci;
-      PetscInt      *closure = NULL;
-      ierr = DMPlexGetTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
-      for (ci = 0; ci < closureSize; ++ci) {
-        const PetscInt closurePoint = closure[2*ci];
-        PetscInt subClosurePoint;
-        PetscHMapIGet(leafpointmap, closurePoint, &subClosurePoint);
-        if (subClosurePoint < 0) {
-//printf("-rank = %d, (closurePoint, ) = (%d, )\n", rank, closurePoint);
-          updatedOwnersReduced[closurePoint] = rank;
-          updatedOwners[closurePoint] = rank;
-        }
-      }
-      ierr = DMPlexRestoreTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
-    }
+  ierr = PetscSFReduceBegin(sf, MPIU_INT, updatedOwners, updatedOwnersReduced, MPI_MAX); CHKERRQ(ierr);
+  ierr = PetscSFReduceEnd(sf, MPIU_INT, updatedOwners, updatedOwnersReduced, MPI_MAX); CHKERRQ(ierr);
+  /* do not transfer ownership if not nessesary */
+  for (p = 0; p < nsubpoints; ++p) {
+    updatedOwnersReduced[subpoints[p]] = rank;
+    updatedOwners[subpoints[p]] = rank;
   }
-  PetscHMapIDestroy(&leafpointmap);
 for (p=pStart; p<pEnd; ++p)
 {
 //  printf("rank = %d, pval=%d, (updatedOwnersReduced, updatedOwners) = (%d, %d)\n", rank, p, updatedOwnersReduced[p-pStart], updatedOwners[p-pStart]);
@@ -4275,53 +4231,35 @@ for (p=pStart; p<pEnd; ++p)
 
 
   /* broadcast new remote subdm indices including ones on new owners */
-  ierr = PetscMalloc1(nroots, &updatedIndicesLocal); CHKERRQ(ierr);
   ierr = PetscMalloc1(nroots, &updatedIndicesReduced); CHKERRQ(ierr);
   ierr = PetscMalloc1(nroots, &updatedIndices); CHKERRQ(ierr);
 
-  ierr = DMPlexCreateSubpointIS(subdm, &subpointIS); CHKERRQ(ierr);
-  if (!subpointIS) SETERRQ(comm, PETSC_ERR_PLIB, "Need subpoint IS!");
-  ierr = ISGetIndices(subpointIS, &subpoints); CHKERRQ(ierr);
-  ierr = ISGetLocalSize(subpointIS, &nsubpoints); CHKERRQ(ierr);
-  if (nsubpoints != (subEnd - subStart)) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Subpoint IS does not cover complete chart");
-  PetscHMapICreate(&pointmap);
-  for (p = 0; p < nsubpoints; ++p) {
-    PetscHMapISet(pointmap, subpoints[p], p);
-  }
-
   for (p = pStart; p < pEnd; ++p) {
-    updatedIndicesLocal[p - pStart] = -1;
     updatedIndicesReduced[p - pStart] = -1;
     updatedIndices[p - pStart] = -1;
   }
-  for (p = 0; p < nleaves; ++p) {
-    PetscHMapIGet(pointmap, ilocal[p], &subpoint);
-    if (subpoint >= 0 && updatedOwners[ilocal[p]] == rank) {
-      updatedIndicesLocal[ilocal[p]] = subpoint;
+  for (p = 0; p < nsubpoints; ++p) {
+    point = subpoints[p];
+    if (updatedOwners[point] == rank) {
+      updatedIndices[point] = p;
     }
   }
-  ierr = PetscSFReduceBegin(sf, MPIU_INT, updatedIndicesLocal, updatedIndicesReduced, MPI_MAX); CHKERRQ(ierr);
-  ierr = PetscSFReduceEnd(sf, MPIU_INT, updatedIndicesLocal, updatedIndicesReduced, MPI_MAX); CHKERRQ(ierr);
-  ierr = PetscFree(updatedIndicesLocal); CHKERRQ(ierr);
+  ierr = PetscSFReduceBegin(sf, MPIU_INT, updatedIndices, updatedIndicesReduced, MPI_MAX); CHKERRQ(ierr);
+  ierr = PetscSFReduceEnd(sf, MPIU_INT, updatedIndices, updatedIndicesReduced, MPI_MAX); CHKERRQ(ierr);
 
-  for (p = pStart; p < pEnd; ++p) {
-    PetscHMapIGet(pointmap, p, &subpoint);
-    if (subpoint >= 0 && updatedOwners[p - pStart] == rank) {
-      updatedIndicesReduced[p-pStart] = subpoint;
-    }
+  for (p = 0; p < nsubpoints; ++p) {
+    point = subpoints[p];
+    updatedIndicesReduced[point] = p;
   }
   ierr = PetscSFBcastBegin(sf, MPIU_INT, updatedIndicesReduced, updatedIndices); CHKERRQ(ierr);
   ierr = PetscSFBcastEnd(sf, MPIU_INT, updatedIndicesReduced, updatedIndices); CHKERRQ(ierr);
   ierr = PetscFree(updatedIndicesReduced); CHKERRQ(ierr);
 
   /* set subsf */
-/*  nsubleaves = 0;
+  nsubleaves = 0;
   for (p = 0; p < nsubpoints; ++p) {
     if (updatedOwners[subpoints[p]] != rank) ++nsubleaves;
   }
-
-
-
   ierr = PetscMalloc1(nsubleaves, &subilocal); CHKERRQ(ierr);
   ierr = PetscMalloc1(nsubleaves, &subiremote); CHKERRQ(ierr);
   for (p = 0, idx = 0; p < nsubpoints; ++p) {
@@ -4334,32 +4272,9 @@ for (p=pStart; p<pEnd; ++p)
       ++idx;
     }
   }
-*/
-  nsubleaves = 0;
-  for (p = 0; p < nleaves; ++p) {
-    PetscHMapIGet(pointmap, ilocal[p], &subpoint);
-//    printf("rank=%d, newowner=%d, subpoint=%d\n",rank,updatedOwners[ilocal[p]], subpoint);
-    if ((subpoint < 0) || (updatedOwners[ilocal[p]] == rank)) continue;
-    ++nsubleaves;
-  }
-
-  ierr = PetscMalloc1(nsubleaves, &subilocal); CHKERRQ(ierr);
-  ierr = PetscMalloc1(nsubleaves, &subiremote); CHKERRQ(ierr);
-  for (p = 0, idx = 0; p < nleaves; ++p) {
-    PetscHMapIGet(pointmap, ilocal[p], &subpoint);
-    if ((subpoint < 0) || (updatedOwners[ilocal[p]] == rank)) continue;
-    subilocal[idx] = subpoint;
-    subiremote[idx].rank = updatedOwners[ilocal[p]];
-    subiremote[idx].index = updatedIndices[ilocal[p]];
-//    printf("%d, nsubleaves=%d, %d, %d\n", rank, nsubleaves, subiremote[idx].rank, subiremote[idx].index);
-    if (subiremote[idx].rank < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid remote rank");
-    if (subiremote[idx].index < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid remote subpoint");
-    ++idx;
-  }
 
   ierr = ISRestoreIndices(subpointIS, &subpoints); CHKERRQ(ierr);
   ierr = ISDestroy(&subpointIS); CHKERRQ(ierr);
-  PetscHMapIDestroy(&pointmap);
   ierr = PetscFree(updatedOwners); CHKERRQ(ierr);
   ierr = PetscFree(updatedIndices); CHKERRQ(ierr);
   ierr = PetscSFSetGraph(subsf, subEnd - subStart, nsubleaves, subilocal, PETSC_OWN_POINTER, subiremote, PETSC_OWN_POINTER); CHKERRQ(ierr);
