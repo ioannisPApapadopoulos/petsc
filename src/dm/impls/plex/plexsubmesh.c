@@ -3945,7 +3945,7 @@ printf("rank=%d, useCone=%d, useClosure=%d,useanchor=%d\n",rank,useCone,useClosu
   ierr = PetscFree(stratumIndices); CHKERRQ(ierr);
   ierr = PetscFree(stratumISes); CHKERRQ(ierr);
 
-  ierr = DMPlexCheckFaces(*subdm, 0, 0); CHKERRQ(ierr);
+  ierr = DMPlexCheckFaces(*subdm, 0); CHKERRQ(ierr);
   ierr = DMPlexCheckSymmetry(*subdm); CHKERRQ(ierr);
   ierr = DMPlexGetOrdering(*subdm, MATORDERINGRCM, NULL, &reordering); CHKERRQ(ierr);
 
