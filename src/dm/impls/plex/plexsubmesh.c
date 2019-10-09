@@ -1,6 +1,7 @@
 #include <petsc/private/dmpleximpl.h>    /*I      "petscdmplex.h"    I*/
 #include <petsc/private/dmlabelimpl.h>   /*I      "petscdmlabel.h"   I*/
 #include <petscsf.h>
+#include <petscdmplex.h>
 
 static PetscErrorCode DMPlexMarkBoundaryFaces_Internal(DM dm, PetscInt val, PetscInt cellHeight, DMLabel label)
 {
@@ -4017,22 +4018,22 @@ PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
 MPI_Comm comm = PetscObjectComm((PetscObject)dm);
 PetscInt           rank;
 ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
+    PetscInt overlap;
+    ierr = DMPlexGetOverlap(dm, &overlap); CHKERRQ(ierr);
     ierr = DMLabelGetStratumIS(tempLabel, tempMark, &marked); CHKERRQ(ierr);
     if (marked) {
       PetscInt          *adj = NULL;
-      PetscInt           adjSize = 10, a;//PETSC_DETERMINE, a;
       ierr = ISGetLocalSize(marked, &npoints); CHKERRQ(ierr);
       ierr = ISGetIndices(marked, &points); CHKERRQ(ierr);
       for (p = 0; p < npoints; ++p) {
+        PetscInt           adjSize = PETSC_DETERMINE, a;
         point = points[p];
-if (point>=hStart && point<hEnd) {
         printf("rank = %d, p=%d, point = %d\n", rank, p, point);
         ierr = DMPlexGetAdjacency(dm, point, &adjSize, &adj); CHKERRQ(ierr);
         for (a = 0; a < adjSize; ++a) {
           ierr = DMLabelSetValue(tempLabel, adj[a], tempMark); CHKERRQ(ierr);
         }
         PetscFree(adj);
-}
       }
       ierr = ISRestoreIndices(marked, &points); CHKERRQ(ierr);
       ierr = ISDestroy(&marked); CHKERRQ(ierr);
