@@ -21,7 +21,7 @@ static PetscErrorCode _DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
   IS                 marked;
   const PetscInt    *points;
   PetscInt          *closure = NULL, *pStart, *pEnd;
-  PetscInt           p, point, npoints, hStart, hEnd, tdim, d;
+  PetscInt           p, point, leafpoint, npoints, hStart, hEnd, tdim, d;
   PetscSF            sf;
   PetscInt           nroots, nleaves;
   const PetscInt    *ilocal;
@@ -31,12 +31,12 @@ static PetscErrorCode _DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
 
   PetscFunctionBegin;
 
+  ierr = DMLabelGetDefaultValue(subpointmap, &defaultValue); CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm, height, &hStart, &hEnd); CHKERRQ(ierr);
 
   /* Mark non-overlapping points */
   ierr = DMGetDimension(dm, &tdim); CHKERRQ(ierr);
   ierr = DMLabelGetStratumIS(filter, filterValue, &marked); CHKERRQ(ierr);
-  //ierr = DMLabelCreate(PetscObjectComm((PetscObject)dm), "tempLabel", &tempLabel); CHKERRQ(ierr);
   tempMark = tdim + 1;
   tempMarkGhost = tempMark + 1;
   ierr = DMGetPointSF(dm, &sf); CHKERRQ(ierr);
@@ -49,20 +49,7 @@ static PetscErrorCode _DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
   if (marked) {
     ierr = ISGetLocalSize(marked, &npoints); CHKERRQ(ierr);
     ierr = ISGetIndices(marked, &points); CHKERRQ(ierr);
-    PetscInt closureSize, ci, leafpoint;
-    /* Mark closure of ghost cell points */
-    for (p = 0; p < npoints; ++p) {
-      point = points[p];
-      if (point < hStart || point >= hEnd) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Filter label marks a point at the incorrect height");
-      ierr = PetscHMapIGet(pointmap, point, &leafpoint); CHKERRQ(ierr);
-      if (leafpoint >= 0) {
-        ierr = DMPlexGetTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
-        for (ci = 0; ci < closureSize; ++ci) {
-          ierr = DMLabelSetValue(subpointmap, closure[2*ci], tempMarkGhost); CHKERRQ(ierr);
-        }
-        ierr = DMPlexRestoreTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
-      }
-    }
+    PetscInt closureSize, ci;
     /* Mark/Overwrite closure of core points */
     for (p = 0; p < npoints; ++p) {
       point = points[p];
@@ -74,6 +61,36 @@ static PetscErrorCode _DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
           ierr = DMLabelSetValue(subpointmap, closure[2*ci], tempMark); CHKERRQ(ierr);
         }
         ierr = DMPlexRestoreTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
+      }
+    }
+    /* Mark adjacent points */
+    PetscBool updated = PETSC_TRUE;
+    while (updated) {
+      updated = PETSC_FALSE;
+      for (p = 0; p < npoints; ++p) {
+        point = points[p];
+        ierr = DMLabelGetValue(subpointmap, point, &leafpoint); CHKERRQ(ierr);
+        if (leafpoint == defaultValue) {
+          /* Check if this point is adjacent to any already marked point */
+          PetscInt val;
+          const PetscInt *cone;
+          ierr = DMPlexGetConeSize(dm, point, &closureSize); CHKERRQ(ierr);
+          ierr = DMPlexGetCone(dm, point, &cone); CHKERRQ(ierr);
+          for (ci = 0; ci < closureSize; ++ci) {
+            ierr = DMLabelGetValue(subpointmap, cone[ci], &val); CHKERRQ(ierr);
+            if (val != defaultValue) break;
+          }
+          if (ci == closureSize) continue;
+          ierr = DMPlexGetTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
+          for (ci = 0; ci < closureSize; ++ci) {
+            ierr = DMLabelGetValue(subpointmap, closure[2*ci], &val); CHKERRQ(ierr);
+            if (val == defaultValue) {
+              ierr = DMLabelSetValue(subpointmap, closure[2*ci], tempMarkGhost); CHKERRQ(ierr);
+            }
+          }
+          ierr = DMPlexRestoreTransitiveClosure(dm, point, PETSC_TRUE, &closureSize, &closure); CHKERRQ(ierr);
+          updated = PETSC_TRUE;
+        }
       }
     }
     ierr = ISRestoreIndices(marked, &points); CHKERRQ(ierr);
@@ -119,7 +136,6 @@ static PetscErrorCode _DMPlexMarkSubpointMap_Closure(DM dm, DMLabel filter,
   }
 
   /* Remove redundant marks */
-  ierr = DMLabelGetDefaultValue(subpointmap, &defaultValue); CHKERRQ(ierr);
   ierr = DMLabelGetStratumIS(subpointmap, tempMarkGhost, &marked); CHKERRQ(ierr);
   if (marked) {
     ierr = ISGetLocalSize(marked, &npoints); CHKERRQ(ierr);
@@ -272,6 +288,7 @@ static PetscErrorCode _DMPlexSubmeshSetPointSF(DM dm, DM subdm,
   }
   ierr = PetscMalloc1(nsubleaves, &subilocal); CHKERRQ(ierr);
   ierr = PetscMalloc1(nsubleaves, &subiremote); CHKERRQ(ierr);
+
   for (p = 0, idx = 0; p < nsubpoints; ++p) {
     if (updatedOwners[subpoints[p]] != rank) {
       subilocal[idx] = p;
@@ -279,7 +296,6 @@ static PetscErrorCode _DMPlexSubmeshSetPointSF(DM dm, DM subdm,
       subiremote[idx].index = updatedIndices[subpoints[p]];
       if (subiremote[idx].rank < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid remote rank");
       if (subiremote[idx].index < 0) SETERRQ(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Invalid remote subpoint");
-      printf("after ownership transfer::: %d, nsubleaves=%d, %d, %d\n", rank, nsubleaves, subiremote[idx].rank, subiremote[idx].index);
       ++idx;
     }
   }
@@ -454,38 +470,11 @@ Check ownership transferring
 
 Global numbering:
 
-           3---9---6---12--7
-           |       |       |
-          10   0   13   1  14
-           |       |       |
-           2---8---4---11--5
-
-Local numberings:
-
-                   dm                     subdm
-
-           3---9--(6)-(12)-(7)          2---6---4
-           |       |        |           |       |
-rank 0:   10   0  (13) (1) (14)   -->   7   0   8
-           |       |        |           |       |
-           2---8--(4)-(11)-(5)          1---5---3
-
-
-          (7)-(13)-4----9---5
-           |       |        |
-rank 1:  (14) (1)  10   0   11    -->      None
-           |       |        |
-          (6)-(12)-2----8---3
-
-
-test 1:
-Global numbering:
-
-           6--16---7---17---11--22--12--23--13
-           |       |        |       |       |
-          18   0   19   1   24  2   25   3  26
-           |       |        |       |       |
-           4--14---5---15---8---20--9---21--10
+           6--16---7---17--11--22--12--23--13
+           |       |       |       |       |
+          18   0   19   1  24  2   25   3  26
+           |       |       |       |       |
+           4--14---5---15--8---20--9---21--10
 
 Local numberings:
 
@@ -506,13 +495,25 @@ rank 1:                   12   0   13   1   14    -->   None
 
 
 
+-overlap 1:
+
+sub cells = {0, 1, 3} (global)
+
+* ownership transfer
+* disconnectedness
 
 
+           5--13---6--14--(9)-(18)(10)                  4--10---5---11--7
+           |       |       |       |                    |       |       |
+rank 0:   15   0   16  1  (19) (2)(20)                 12   0   13  1   14
+           |       |       |       |                    |       |       |
+           3--11---4--12--(7)-(17)(8)                   2---8---3---9---6
 
-
-
-
-
+                 (10)-(19)-6--13---7---14--8                                    3---6---4
+                   |       |       |       |                                    |       |
+rank 1:          (20) (2)  15  0   16  1   17                                   7   0   8
+                   |       |       |       |                                    |       |
+                  (9)-(18)-3--11---4---12--5                                    1 --5---2
 
 
 
@@ -531,7 +532,7 @@ PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
 
   PetscFunctionBegin;
   options->testNum      = 0;
-  options->overlap      = 1;
+  options->overlap      = 0;
 
   ierr = PetscOptionsBegin(comm, "", "Meshing Interpolation Test Options", "DMPLEX");CHKERRQ(ierr);
   ierr = PetscOptionsBoundedInt("-testNum", "The mesh to create", "ex37.c", options->testNum, &options->testNum, NULL,0);CHKERRQ(ierr);
@@ -559,30 +560,8 @@ int main(int argc, char **argv)
   ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
   ierr = DMLabelCreate(comm, "filter", &filter); CHKERRQ(ierr);
 
-  switch (user.testNum)
-  {
+  switch (user.testNum) {
     case 0:
-    {
-      /* Create parallel dm */
-      const PetscInt faces[2] = {2,1};
-      DM             pdm;
-      PetscSF        sf;
-      ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_FALSE, faces, NULL, NULL, NULL, PETSC_TRUE, &dm); CHKERRQ(ierr);
-      ierr = DMPlexDistribute(dm, 1, &sf, &pdm); CHKERRQ(ierr);
-      if (pdm) {
-        ierr = DMDestroy(&dm); CHKERRQ(ierr);
-        dm = pdm;
-      }
-      if (sf) {
-        ierr = PetscSFDestroy(&sf); CHKERRQ(ierr);
-      }
-      /* Create filter label */
-      height = 0;
-      if (rank==0) DMLabelSetValue(filter, 0, filterValue);
-      if (rank==1) DMLabelSetValue(filter, 1, filterValue);
-      break;
-    }
-    case 1:
     {
       /* Create parallel dm */
       const PetscInt faces[2] = {4,1};
@@ -599,9 +578,25 @@ int main(int argc, char **argv)
       }
       /* Create filter label */
       height = 0;
-      if (rank==0) {
-        DMLabelSetValue(filter, 0, filterValue);
-        DMLabelSetValue(filter, 1, filterValue);
+      switch (user.overlap) {
+        case 0:
+          if (rank==0) {
+            DMLabelSetValue(filter, 0, filterValue);
+            DMLabelSetValue(filter, 1, filterValue);
+          }
+          break;
+        case 1:
+          if (rank==0) {
+            DMLabelSetValue(filter, 0, filterValue);
+            DMLabelSetValue(filter, 1, filterValue);
+          }
+          if (rank==1) {
+            DMLabelSetValue(filter, 2, filterValue);
+            DMLabelSetValue(filter, 1, filterValue);
+          }
+          break;
+        case 2:
+          break;
       }
       break;
     }
@@ -642,11 +637,11 @@ int main(int argc, char **argv)
   test:
     suffix: 0
     nsize: 2
-    args: -testNum 0 -overlap 1 -dm_view ascii::ascii_info_detail
+    args: -testNum 0 -overlap 0 -dm_view ascii::ascii_info_detail
   test:
     suffix: 1
     nsize: 2
-    args: -testNum 1 -overlap 0 -dm_view ascii::ascii_info_detail
+    args: -testNum 0 -overlap 1 -dm_view ascii::ascii_info_detail
   test:
     suffix: 2
     args: -dim 2 -cell_simplex 0 -dm_view ascii::ascii_info_detail
