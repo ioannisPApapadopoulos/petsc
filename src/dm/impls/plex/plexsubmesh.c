@@ -4050,7 +4050,6 @@ PetscErrorCode DMPlexMarkSubpointMap_Closure(DM dm,
   ierr = PetscFree(pStart); CHKERRQ(ierr);
   ierr = PetscFree(pEnd); CHKERRQ(ierr);
   PetscFunctionReturn(0);
-  PetscFunctionReturn(0);
 }
 
 PetscErrorCode DMPlexSubmeshSetConeSizes(DM dm, DM subdm,
