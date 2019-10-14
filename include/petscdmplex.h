@@ -237,12 +237,12 @@ PETSC_EXTERN PetscErrorCode DMPlexSetRegularRefinement(DM, PetscBool);
 PETSC_EXTERN PetscErrorCode DMPlexRefineSimplexToTensor(DM, DM*);
 
 PETSC_EXTERN PetscErrorCode DMPlexCreateSubDMPlex(DM, DM *, DMLabel, PetscInt, PetscInt);
-PETSC_EXTERN PetscErrorCode DMPlexMarkSubpointMap_Closure(DM, DMLabel, PetscInt, PetscInt, DMLabel);
+PETSC_EXTERN PetscErrorCode DMPlexMarkSubpointMap_Closure(DM, DMLabel, PetscInt, PetscInt, DMLabel, PetscBool);
 PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetConeSizes(DM, DM, DMLabel, const PetscInt *, const PetscInt *, const PetscInt **);
 PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetCones(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
 PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetTopology(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
 PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetCoordinates(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
-PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetPointSF(DM, DM);
+PETSC_EXTERN PetscErrorCode DMPlexSubmeshSetPointSF(DM, DM, const PetscInt *, const PetscInt *, const PetscInt **);
 
 /* Support for cell-vertex meshes */
 PETSC_EXTERN PetscErrorCode DMPlexGetNumFaceVertices(DM, PetscInt, PetscInt, PetscInt *);
