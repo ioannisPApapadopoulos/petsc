@@ -368,7 +368,7 @@ static PetscErrorCode _DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, P
     ierr = DMGetPointSF(dm, &sf); CHKERRQ(ierr);
     ierr = PetscSFGetGraph(sf, &nroots, &nleaves, &ilocal, &iremote); CHKERRQ(ierr);
     ierr = DMLabelCreate(comm, "subpoint_map", &subpointMap); CHKERRQ(ierr);
-    ierr = _DMPlexMarkSubpointMap_Closure(dm, filter, filterValue, height, subpointMap, PETSC_TRUE); CHKERRQ(ierr);
+    ierr = DMPlexMarkSubpointMap_Closure(dm, filter, filterValue, height, subpointMap, PETSC_TRUE); CHKERRQ(ierr);
     ierr = DMLabelDestroy(&nonOverlappingFilter); CHKERRQ(ierr);
   }
   ierr = PetscMalloc1(subtdim+1, &stratumSizes); CHKERRQ(ierr);
@@ -402,7 +402,7 @@ static PetscErrorCode _DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, P
 
   ierr = DMPlexSubmeshSetTopology(dm, *subdm, stratumOffsets, stratumSizes, stratumIndices); CHKERRQ(ierr);
   ierr = DMPlexSubmeshSetCoordinates(dm, *subdm, stratumOffsets, stratumSizes, stratumIndices); CHKERRQ(ierr);
-  ierr = _DMPlexSubmeshSetPointSF(dm, *subdm, stratumOffsets, stratumSizes, stratumIndices); CHKERRQ(ierr);
+  ierr = DMPlexSubmeshSetPointSF(dm, *subdm, stratumOffsets, stratumSizes, stratumIndices); CHKERRQ(ierr);
 
   /* Add the partition overlap to the subdm */
   /*{
@@ -721,7 +721,7 @@ int main(int argc, char **argv)
     }
   }
 
-  ierr = _DMPlexCreateSubDMPlex(dm, &subdm, filter, filterValue, height);
+  ierr = DMPlexCreateSubDMPlex(dm, &subdm, filter, filterValue, height);
   ierr = DMLabelDestroy(&filter); CHKERRQ(ierr);
 
   ierr = PetscObjectSetName((PetscObject) dm, "Example_DM");CHKERRQ(ierr);
