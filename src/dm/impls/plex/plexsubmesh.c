@@ -3817,7 +3817,7 @@ PetscErrorCode DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, PetscInt 
     ierr = DMGetPointSF(dm, &sf); CHKERRQ(ierr);
     ierr = PetscSFGetGraph(sf, &nroots, &nleaves, &ilocal, &iremote); CHKERRQ(ierr);
     ierr = DMLabelCreate(comm, "subpoint_map", &subpointMap); CHKERRQ(ierr);
-    ierr = _DMPlexMarkSubpointMap_Closure(dm, filter, filterValue, height, subpointMap, PETSC_TRUE); CHKERRQ(ierr);
+    ierr = DMPlexMarkSubpointMap_Closure(dm, filter, filterValue, height, subpointMap, PETSC_TRUE); CHKERRQ(ierr);
     ierr = DMLabelDestroy(&nonOverlappingFilter); CHKERRQ(ierr);
   }
   ierr = PetscMalloc1(subtdim+1, &stratumSizes); CHKERRQ(ierr);
