@@ -363,9 +363,6 @@ static PetscErrorCode _DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, P
     PetscInt           nroots, nleaves;
     const PetscInt    *ilocal;
     const PetscSFNode *iremote;
-    IS                 marked;
-    PetscInt           p, point, npoints, leafpoint, adjpoint;
-    const PetscInt    *points;
 
     ierr = DMLabelCreate(PetscObjectComm((PetscObject)dm), "nonOverlappingFilter", &nonOverlappingFilter); CHKERRQ(ierr);
     ierr = DMGetPointSF(dm, &sf); CHKERRQ(ierr);
@@ -462,11 +459,15 @@ static PetscErrorCode _DMPlexCreateSubDMPlex(DM dm, DM *subdm, DMLabel filter, P
 
 
 
-/*
+/* Submesh of a four-element mesh
 
-test 0:
-Extract left half domain (2 proc.)
-Check ownership transferring
+
+Check if it can:
+
+* transfer ownership when necessary
+* remove redundant points that are in the halo in the original mesh, but not in the submesh
+* treat disconnected submesh
+
 
 Global numbering:
 
@@ -476,9 +477,17 @@ Global numbering:
            |       |       |       |       |
            4--14---5---15--8---20--9---21--10
 
-Local numberings:
+* all subpoints = {...} defined below are given in the global numbering
+
 
                             dm                                        subdm
+                         -------                                    ---------
+
+overlap 0:
+---------
+
+subdim 2: subpoints = {0, 1}
+
 
            5--10---6---11-(7)                           5--10---6---11--7
            |       |       |                            |       |       |
@@ -494,34 +503,99 @@ rank 1:                   12   0   13   1   14    -->   None
                            2---8---3----9---4
 
 
+subdim 1: subpoints = {16, 17}
 
--overlap 1:
 
-sub cells = {0, 1, 3} (global)
+           5--10---6---11-(7)                           2---0---3---1---4
+           |       |       |                            
+rank 0:   12   0   13  1  (14)                    --> 
+           |       |       |                          
+           2---8---3---9--(4)                         
 
-* ownership transfer
-* disconnectedness
+
+                           5--10---6---11---7
+                           |       |        |
+rank 1:                   12   0   13   1   14    -->   None
+                           |       |        |
+                           2---8---3----9---4
+
+
+subdim 0: subpoints = {6, 7, 11}
+
+
+           5--10---6---11-(7)                           0       1
+           |       |       |                            
+rank 0:   12   0   13  1  (14)                    --> 
+           |       |       |                          
+           2---8---3---9--(4)                         
+
+
+                           5--10---6---11---7                           0
+                           |       |        |
+rank 1:                   12   0   13   1   14    -->
+                           |       |        |
+                           2---8---3----9---4
+
+
+overlap 1:
+---------
+
+subdim 2: subpoints = {0, 1, 3}
 
 
            5--13---6--14--(9)-(18)(10)                  4--10---5---11--7
            |       |       |       |                    |       |       |
-rank 0:   15   0   16  1  (19) (2)(20)                 12   0   13  1   14
+rank 0:   15   0   16  1  (19) (2)(20)            -->  12   0   13  1   14
            |       |       |       |                    |       |       |
            3--11---4--12--(7)-(17)(8)                   2---8---3---9---6
 
-                 (10)-(19)-6--13---7---14--8                                    3---6---4
-                   |       |       |       |                                    |       |
-rank 1:          (20) (2)  15  0   16  1   17                                   7   0   8
-                   |       |       |       |                                    |       |
-                  (9)-(18)-3--11---4---12--5                                    1 --5---2
+
+                 (10)-(19)-6--13---7---14--8                                      3---6---4
+                   |       |       |       |                                      |       |
+rank 1:          (20) (2)  15  0   16  1   17     -->                             7   0   8
+                   |       |       |       |                                      |       |
+                  (9)-(18)-3--11---4---12--5                                      1 --5---2
 
 
 
+subdim 1: subpoints = {16, 17, 23}
+
+
+           5--13---6--14--(9)-(18)(10)                  2---0---3---1---4
+           |       |       |       |                 
+rank 0:   15   0   16  1  (19) (2)(20)            -->
+           |       |       |       |                 
+           3--11---4--12--(7)-(17)(8)                
+
+
+                 (10)-(19)-6--13---7---14--8                                      1---0---2
+                   |       |       |       |         
+rank 1:          (20) (2)  15  0   16  1   17     -->
+                   |       |       |       |         
+                  (9)-(18)-3--11---4---12--5         
+
+
+suddim 0: subpoints = {6, 7, 11, 13}
+
+
+           5--13---6--14--(9)-(18)(10)                  0       1
+           |       |       |       |                 
+rank 0:   15   0   16  1  (19) (2)(20)            -->
+           |       |       |       |                 
+           3--11---4--12--(7)-(17)(8)                
+
+
+                 (10)-(19)-6--13---7---14--8                            0                 1
+                   |       |       |       |         
+rank 1:          (20) (2)  15  0   16  1   17     -->
+                   |       |       |       |         
+                  (9)-(18)-3--11---4---12--5         
 
 */
 
+
 typedef struct {
-  PetscInt  testNum;                      /* Indicates the mesh to create */
+  PetscInt  subdim;                       /* Indicates the mesh to create */
   PetscInt  overlap;                      /* The partition overlap */
 } AppCtx;
 
@@ -531,11 +605,11 @@ PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  options->testNum      = 0;
-  options->overlap      = 0;
+  options->subdim  = 2;
+  options->overlap = 0;
 
   ierr = PetscOptionsBegin(comm, "", "Meshing Interpolation Test Options", "DMPLEX");CHKERRQ(ierr);
-  ierr = PetscOptionsBoundedInt("-testNum", "The mesh to create", "ex37.c", options->testNum, &options->testNum, NULL,0);CHKERRQ(ierr);
+  ierr = PetscOptionsBoundedInt("-subdim", "The mesh to create", "ex37.c", options->subdim, &options->subdim, NULL,0);CHKERRQ(ierr);
   ierr = PetscOptionsBoundedInt("-overlap", "The partition overlap", "ex37.c", options->overlap, &options->overlap, NULL,0);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();
   PetscFunctionReturn(0);
@@ -549,35 +623,37 @@ int main(int argc, char **argv)
   PetscInt         height;
   const PetscInt   filterValue = 1;
   MPI_Comm         comm;
-  PetscMPIInt rank, size;
   AppCtx           user;
+  PetscMPIInt      rank;
   PetscErrorCode   ierr;
 
-  ierr = PetscInitialize(&argc, &argv, NULL, NULL); if (ierr) return ierr;
+  ierr = PetscInitialize(&argc, &argv, NULL, help); if (ierr) return ierr;
   comm = PETSC_COMM_WORLD;
   ierr = ProcessOptions(comm, &user);CHKERRQ(ierr);
-
   ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
   ierr = DMLabelCreate(comm, "filter", &filter); CHKERRQ(ierr);
 
-  switch (user.testNum) {
-    case 0:
+  /* Create parallel dm */
+  const PetscInt faces[2] = {4,1};
+  DM             pdm;
+  PetscSF        sf;
+  ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_FALSE, faces, NULL, NULL, NULL, PETSC_TRUE, &dm); CHKERRQ(ierr);
+  ierr = DMPlexDistribute(dm, user.overlap, &sf, &pdm); CHKERRQ(ierr);
+  if (pdm) {
+    ierr = DMDestroy(&dm); CHKERRQ(ierr);
+    dm = pdm;
+  }
+  if (sf) {
+    ierr = PetscSFDestroy(&sf); CHKERRQ(ierr);
+  }
+
+  /* Define height */
+  height = 2 - user.subdim;
+
+  /* Create filter label */
+  switch (user.subdim) {
+    case 2:
     {
-      /* Create parallel dm */
-      const PetscInt faces[2] = {4,1};
-      DM             pdm;
-      PetscSF        sf;
-      ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_FALSE, faces, NULL, NULL, NULL, PETSC_TRUE, &dm); CHKERRQ(ierr);
-      ierr = DMPlexDistribute(dm, user.overlap, &sf, &pdm); CHKERRQ(ierr);
-      if (pdm) {
-        ierr = DMDestroy(&dm); CHKERRQ(ierr);
-        dm = pdm;
-      }
-      if (sf) {
-        ierr = PetscSFDestroy(&sf); CHKERRQ(ierr);
-      }
-      /* Create filter label */
-      height = 0;
       switch (user.overlap) {
         case 0:
           if (rank==0) {
@@ -589,33 +665,61 @@ int main(int argc, char **argv)
           if (rank==0) {
             DMLabelSetValue(filter, 0, filterValue);
             DMLabelSetValue(filter, 1, filterValue);
-          }
-          if (rank==1) {
+          } else if (rank==1) {
             DMLabelSetValue(filter, 2, filterValue);
             DMLabelSetValue(filter, 1, filterValue);
           }
           break;
-        case 2:
+      }
+      break;
+    }
+    case 1:
+    {
+      switch (user.overlap) {
+        case 0:
+          if (rank==0) {
+            DMLabelSetValue(filter, 10, filterValue);
+            DMLabelSetValue(filter, 11, filterValue);
+          }
+          break;
+        case 1:
+          if (rank==0) {
+            DMLabelSetValue(filter, 13, filterValue);
+            DMLabelSetValue(filter, 14, filterValue);
+          } else if (rank==1) {
+            DMLabelSetValue(filter, 19, filterValue);
+            DMLabelSetValue(filter, 14, filterValue);
+          }
+          break;
+      }
+      break;
+    }
+    case 0:
+    {
+      switch (user.overlap) {
+        case 0:
+          if (rank==0) {
+            DMLabelSetValue(filter, 5, filterValue);
+            DMLabelSetValue(filter, 6, filterValue);
+            DMLabelSetValue(filter, 7, filterValue);
+          } else if (rank==1) {
+            DMLabelSetValue(filter, 5, filterValue);
+          }
+          break;
+        case 1:
+          if (rank==0) {
+            DMLabelSetValue(filter, 5, filterValue);
+            DMLabelSetValue(filter, 6, filterValue);
+            DMLabelSetValue(filter, 9, filterValue);
+          } else if (rank==1) {
+            DMLabelSetValue(filter, 6, filterValue);
+            DMLabelSetValue(filter, 8, filterValue);
+          }
           break;
       }
       break;
     }
   }
-// testing........
-{
-  PetscInt pStart, pEnd, p;
-  ierr = DMPlexGetChart(dm, &pStart, &pEnd); CHKERRQ(ierr);
-  IS        globalPointNumbers;
-  const PetscInt *ixs;
-  ierr = DMPlexCreatePointNumbering(dm, &globalPointNumbers);CHKERRQ(ierr);
-  ierr = ISGetIndices(globalPointNumbers, &ixs);CHKERRQ(ierr);
-  for (p = pStart; p < pEnd; ++p) {
-    printf("rank = %d, (globalnum, localnum) = (%d, %d)\n", rank, ixs[p-pStart], p);
-  }
-  ierr = ISRestoreIndices(globalPointNumbers, &ixs);CHKERRQ(ierr);
-  ierr = ISDestroy(&globalPointNumbers);CHKERRQ(ierr);
-}
-// testing end
 
   ierr = _DMPlexCreateSubDMPlex(dm, &subdm, filter, filterValue, height);
   ierr = DMLabelDestroy(&filter); CHKERRQ(ierr);
@@ -633,21 +737,30 @@ int main(int argc, char **argv)
 
 /*TEST
 
-  # Two cell test meshes 0-7
+  # Four cell tests
   test:
     suffix: 0
     nsize: 2
-    args: -testNum 0 -overlap 0 -dm_view ascii::ascii_info_detail
+    args: -subdim 2 -overlap 0 -dm_view ascii::ascii_info_detail
   test:
     suffix: 1
     nsize: 2
-    args: -testNum 0 -overlap 1 -dm_view ascii::ascii_info_detail
+    args: -subdim 1 -overlap 0 -dm_view ascii::ascii_info_detail
   test:
     suffix: 2
-    args: -dim 2 -cell_simplex 0 -dm_view ascii::ascii_info_detail
+    nsize: 2
+    args: -subdim 0 -overlap 0 -dm_view ascii::ascii_info_detail
   test:
     suffix: 3
     nsize: 2
-    args: -petscpartitioner_type simple -dim 2 -cell_simplex 0 -dm_view ascii::ascii_info_detail
+    args: -subdim 2 -overlap 1 -dm_view ascii::ascii_info_detail
+  test:
+    suffix: 4
+    nsize: 2
+    args: -subdim 1 -overlap 1 -dm_view ascii::ascii_info_detail
+  test:
+    suffix: 5
+    nsize: 2
+    args: -subdim 0 -overlap 1 -dm_view ascii::ascii_info_detail
 
 TEST*/
