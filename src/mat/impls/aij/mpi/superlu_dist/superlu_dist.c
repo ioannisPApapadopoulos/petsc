@@ -1,13 +1,9 @@
-
 /*
         Provides an interface to the SuperLU_DIST sparse solver
 */
 
 #include <../src/mat/impls/aij/seq/aij.h>
 #include <../src/mat/impls/aij/mpi/mpiaij.h>
-#if defined(PETSC_HAVE_STDLIB_H) /* This is to get around weird problem with SuperLU on cray */
-#include <stdlib.h>
-#endif
 
 EXTERN_C_BEGIN
 #if defined(PETSC_USE_COMPLEX)
@@ -106,7 +102,7 @@ static PetscErrorCode MatSolve_SuperLU_DIST(Mat A,Vec b_mpi,Vec x)
   static PetscBool cite = PETSC_FALSE;
 
   PetscFunctionBegin;
-  if (lu->options.Fact != FACTORED) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"SuperLU_DIST options.Fact mush equal FACTORED");
+  if (lu->options.Fact != FACTORED) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"SuperLU_DIST options.Fact must equal FACTORED");
   ierr = PetscCitationsRegister("@article{lidemmel03,\n  author = {Xiaoye S. Li and James W. Demmel},\n  title = {{SuperLU_DIST}: A Scalable Distributed-Memory Sparse Direct\n           Solver for Unsymmetric Linear Systems},\n  journal = {ACM Trans. Mathematical Software},\n  volume = {29},\n  number = {2},\n  pages = {110-140},\n  year = 2003\n}\n",&cite);CHKERRQ(ierr);
 
   ierr = MPI_Comm_size(PetscObjectComm((PetscObject)A),&size);CHKERRQ(ierr);
@@ -153,7 +149,7 @@ static PetscErrorCode MatMatSolve_SuperLU_DIST(Mat A,Mat B_mpi,Mat X)
   PetscBool        flg;
 
   PetscFunctionBegin;
-  if (lu->options.Fact != FACTORED) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"SuperLU_DIST options.Fact mush equal FACTORED");
+  if (lu->options.Fact != FACTORED) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONG,"SuperLU_DIST options.Fact must equal FACTORED");
   ierr = PetscObjectTypeCompareAny((PetscObject)B_mpi,&flg,MATSEQDENSE,MATMPIDENSE,NULL);CHKERRQ(ierr);
   if (!flg) SETERRQ(PetscObjectComm((PetscObject)A),PETSC_ERR_ARG_WRONG,"Matrix B must be MATDENSE matrix");
   ierr = PetscObjectTypeCompareAny((PetscObject)X,&flg,MATSEQDENSE,MATMPIDENSE,NULL);CHKERRQ(ierr);
@@ -319,9 +315,9 @@ static PetscErrorCode MatLUFactorNumeric_SuperLU_DIST(Mat F,Mat A,const MatFacto
     av = aa->a;
 #endif
 
-    ierr = PetscMemcpy(lu->row,ai,(m+1)*sizeof(PetscInt));CHKERRQ(ierr);
-    ierr = PetscMemcpy(lu->col,aj,nz*sizeof(PetscInt));CHKERRQ(ierr);
-    ierr = PetscMemcpy(lu->val,av,nz*sizeof(PetscScalar));CHKERRQ(ierr);
+    ierr = PetscArraycpy(lu->row,ai,(m+1));CHKERRQ(ierr);
+    ierr = PetscArraycpy(lu->col,aj,nz);CHKERRQ(ierr);
+    ierr = PetscArraycpy(lu->val,av,nz);CHKERRQ(ierr);
   } else {
     nz = 0;
     for (i=0; i<m; i++) {
@@ -503,6 +499,7 @@ static PetscErrorCode MatView_Info_SuperLU_DIST(Mat A,PetscViewer viewer)
   case MMD_ATA:
     ierr = PetscViewerASCIIPrintf(viewer,"  Column permutation MMD_ATA\n");CHKERRQ(ierr);
     break;
+  /*  Even though this is called METIS, the SuperLU_DIST code sets this by default if PARMETIS is defined, not METIS */
   case METIS_AT_PLUS_A:
     ierr = PetscViewerASCIIPrintf(viewer,"  Column permutation METIS_AT_PLUS_A\n");CHKERRQ(ierr);
     break;

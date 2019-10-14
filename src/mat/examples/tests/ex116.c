@@ -146,7 +146,7 @@ int main(int argc,char **args)
 
     /* Save A to arrayErr for checking accuracy later. arrayA will be destroyed by LAPACKgesvd_() */
     ierr = MatDenseGetArray(A_dense,&arrayA);CHKERRQ(ierr);
-    ierr = PetscMemcpy(arrayErr,arrayA,sizeof(PetscScalar)*m*minMN);CHKERRQ(ierr);
+    ierr = PetscArraycpy(arrayErr,arrayA,m*minMN);CHKERRQ(ierr);
 
     ierr = PetscBLASIntCast(m,&im);CHKERRQ(ierr);
     ierr = PetscBLASIntCast(n,&in);CHKERRQ(ierr);
@@ -216,7 +216,7 @@ PetscErrorCode CkEigenSolutions(PetscInt cklvl,Mat A,PetscInt il,PetscInt iu,Pet
       for (j=il; j<iu; j++) {
         ierr = VecDot(evec[j],vt1,&dot);CHKERRQ(ierr);
         if (j == i) {
-          dot = PetscAbsScalar(dot - 1.0);
+          dot = PetscAbsScalar(dot - 1);
         } else {
           dot = PetscAbsScalar(dot);
         }

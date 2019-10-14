@@ -1,6 +1,7 @@
 #include <petscis.h>         /*I  "petscis.h"  I*/
 #include <petsc/private/isimpl.h>
 #include <petsc/private/viewerimpl.h>
+#include <petsclayouthdf5.h>
 
 #if defined(PETSC_HAVE_HDF5)
 /*
@@ -90,7 +91,7 @@ PetscErrorCode ISLoad_Binary(IS is, PetscViewer viewer)
   ierr = PetscViewerBinaryGetDescriptor(viewer,&fd);CHKERRQ(ierr);
 
   if (!rank) {
-    ierr = PetscBinaryRead(fd,idx,ln,PETSC_INT);CHKERRQ(ierr);
+    ierr = PetscBinaryRead(fd,idx,ln,NULL,PETSC_INT);CHKERRQ(ierr);
 
     if (size > 1) {
       PetscInt *range,n,i,*idxwork;
@@ -104,7 +105,7 @@ PetscErrorCode ISLoad_Binary(IS is, PetscViewer viewer)
       ierr = PetscMalloc1(n,&idxwork);CHKERRQ(ierr);
       for (i=1; i<size; i++) {
         n    = range[i+1] - range[i];
-        ierr = PetscBinaryRead(fd,idxwork,n,PETSC_INT);CHKERRQ(ierr);
+        ierr = PetscBinaryRead(fd,idxwork,n,NULL,PETSC_INT);CHKERRQ(ierr);
         ierr = MPI_Isend(idxwork,n,MPIU_INT,i,tag,comm,&request);CHKERRQ(ierr);
         ierr = MPI_Wait(&request,&status);CHKERRQ(ierr);
       }

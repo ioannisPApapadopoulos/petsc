@@ -16,7 +16,7 @@ PetscErrorCode KSPComputeExtremeSingularValues_GMRES(KSP ksp,PetscReal *emax,Pet
   PetscErrorCode ierr;
   PetscInt       n = gmres->it + 1,i,N = gmres->max_k + 2;
   PetscBLASInt   bn, bN,lwork, idummy,lierr;
-  PetscScalar    *R        = gmres->Rsvd,*work = R + N*N,sdummy;
+  PetscScalar    *R        = gmres->Rsvd,*work = R + N*N,sdummy = 0;
   PetscReal      *realpart = gmres->Dsvd;
 
   PetscFunctionBegin;
@@ -29,7 +29,7 @@ PetscErrorCode KSPComputeExtremeSingularValues_GMRES(KSP ksp,PetscReal *emax,Pet
     PetscFunctionReturn(0);
   }
   /* copy R matrix to work space */
-  ierr = PetscMemcpy(R,gmres->hh_origin,(gmres->max_k+2)*(gmres->max_k+1)*sizeof(PetscScalar));CHKERRQ(ierr);
+  ierr = PetscArraycpy(R,gmres->hh_origin,(gmres->max_k+2)*(gmres->max_k+1));CHKERRQ(ierr);
 
   /* zero below diagonal garbage */
   for (i=0; i<n; i++) R[i*N+i+1] = 0.0;
@@ -60,14 +60,13 @@ PetscErrorCode KSPComputeEigenvalues_GMRES(KSP ksp,PetscInt nmax,PetscReal *r,Pe
   PetscInt       n = gmres->it + 1,N = gmres->max_k + 1;
   PetscInt       i,*perm;
   PetscScalar    *R     = gmres->Rsvd;
-  PetscScalar    *cwork = R + N*N,sdummy;
+  PetscScalar    *cwork = R + N*N,sdummy = 0;
   PetscReal      *work,*realpart = gmres->Dsvd;
-  PetscBLASInt   zero = 0,bn,bN,idummy,lwork;
+  PetscBLASInt   zero = 0,bn,bN,idummy = -1,lwork;
 
   PetscFunctionBegin;
   ierr   = PetscBLASIntCast(n,&bn);CHKERRQ(ierr);
   ierr   = PetscBLASIntCast(N,&bN);CHKERRQ(ierr);
-  idummy = -1;                  /* unused */
   ierr   = PetscBLASIntCast(5*N,&lwork);CHKERRQ(ierr);
   if (nmax < n) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_ARG_SIZ,"Not enough room in work space r and c for eigenvalues");
   *neig = n;
@@ -75,7 +74,7 @@ PetscErrorCode KSPComputeEigenvalues_GMRES(KSP ksp,PetscInt nmax,PetscReal *r,Pe
   if (!n) PetscFunctionReturn(0);
 
   /* copy R matrix to work space */
-  ierr = PetscMemcpy(R,gmres->hes_origin,N*N*sizeof(PetscScalar));CHKERRQ(ierr);
+  ierr = PetscArraycpy(R,gmres->hes_origin,N*N);CHKERRQ(ierr);
 
   /* compute eigenvalues */
 
@@ -121,9 +120,9 @@ PetscErrorCode KSPComputeEigenvalues_GMRES(KSP ksp,PetscInt nmax,PetscReal *r,Pe
   KSP_GMRES      *gmres = (KSP_GMRES*)ksp->data;
   PetscErrorCode ierr;
   PetscInt       n = gmres->it + 1,N = gmres->max_k + 1,i,*perm;
-  PetscBLASInt   bn, bN, lwork, idummy, lierr;
+  PetscBLASInt   bn, bN, lwork, idummy, lierr = -1;
   PetscScalar    *R        = gmres->Rsvd,*work = R + N*N;
-  PetscScalar    *realpart = gmres->Dsvd,*imagpart = realpart + N,sdummy;
+  PetscScalar    *realpart = gmres->Dsvd,*imagpart = realpart + N,sdummy = 0;
 
   PetscFunctionBegin;
   ierr = PetscBLASIntCast(n,&bn);CHKERRQ(ierr);
@@ -136,7 +135,7 @@ PetscErrorCode KSPComputeEigenvalues_GMRES(KSP ksp,PetscInt nmax,PetscReal *r,Pe
   if (!n) PetscFunctionReturn(0);
 
   /* copy R matrix to work space */
-  ierr = PetscMemcpy(R,gmres->hes_origin,N*N*sizeof(PetscScalar));CHKERRQ(ierr);
+  ierr = PetscArraycpy(R,gmres->hes_origin,N*N);CHKERRQ(ierr);
 
   /* compute eigenvalues */
   ierr = PetscFPTrapPush(PETSC_FP_TRAP_OFF);CHKERRQ(ierr);
@@ -156,7 +155,7 @@ PetscErrorCode KSPComputeEigenvalues_GMRES(KSP ksp,PetscInt nmax,PetscReal *r,Pe
   PetscErrorCode ierr;
   PetscInt       n  = gmres->it + 1,N = gmres->max_k + 1,i,*perm;
   PetscScalar    *R = gmres->Rsvd,*work = R + N*N,*eigs = work + 5*N,sdummy;
-  PetscBLASInt   bn,bN,lwork,idummy,lierr;
+  PetscBLASInt   bn,bN,lwork,idummy,lierr = -1;
 
   PetscFunctionBegin;
   ierr = PetscBLASIntCast(n,&bn);CHKERRQ(ierr);
@@ -169,7 +168,7 @@ PetscErrorCode KSPComputeEigenvalues_GMRES(KSP ksp,PetscInt nmax,PetscReal *r,Pe
   if (!n) PetscFunctionReturn(0);
 
   /* copy R matrix to work space */
-  ierr = PetscMemcpy(R,gmres->hes_origin,N*N*sizeof(PetscScalar));CHKERRQ(ierr);
+  ierr = PetscArraycpy(R,gmres->hes_origin,N*N);CHKERRQ(ierr);
 
   /* compute eigenvalues */
   ierr = PetscFPTrapPush(PETSC_FP_TRAP_OFF);CHKERRQ(ierr);
@@ -200,7 +199,7 @@ PetscErrorCode KSPComputeRitz_GMRES(KSP ksp,PetscBool ritz,PetscBool small,Petsc
   PetscReal      *wr,*wi,*modul;       /* Real and imaginary part and modul of the Ritz values*/
   PetscReal      *SR,*work;
   PetscBLASInt   bn,bN,lwork,idummy;
-  PetscScalar    *t,sdummy;
+  PetscScalar    *t,sdummy = 0;
 
   PetscFunctionBegin;
   /* n: size of the Hessenberg matrix */
@@ -222,9 +221,9 @@ PetscErrorCode KSPComputeRitz_GMRES(KSP ksp,PetscBool ritz,PetscBool small,Petsc
 
   /* copy H matrix to work space */
   if (gmres->fullcycle) {
-    ierr = PetscMemcpy(H,gmres->hes_ritz,bN*bN*sizeof(PetscReal));CHKERRQ(ierr);
+    ierr = PetscArraycpy(H,gmres->hes_ritz,bN*bN);CHKERRQ(ierr);
   } else {
-    ierr = PetscMemcpy(H,gmres->hes_origin,bN*bN*sizeof(PetscReal));CHKERRQ(ierr);
+    ierr = PetscArraycpy(H,gmres->hes_origin,bN*bN);CHKERRQ(ierr);
   }
 
   /* Modify H to compute Harmonic Ritz pairs H = H + H^{-T}*h^2_{m+1,m}e_m*e_m^T */
@@ -291,7 +290,7 @@ PetscErrorCode KSPComputeRitz_GMRES(KSP ksp,PetscBool ritz,PetscBool small,Petsc
     for (i=0; i<nb; i++) {
       tetar[i] = wr[perm[i]];
       tetai[i] = wi[perm[i]];
-      ierr = PetscMemcpy(&SR[i*n],&(Q[perm[i]*bn]),n*sizeof(PetscReal));CHKERRQ(ierr);
+      ierr = PetscArraycpy(&SR[i*n],&(Q[perm[i]*bn]),n);CHKERRQ(ierr);
     }
   } else {
     while (nb < NbrRitz) {
@@ -302,7 +301,7 @@ PetscErrorCode KSPComputeRitz_GMRES(KSP ksp,PetscBool ritz,PetscBool small,Petsc
     for (i=0; i<nb; i++) {
       tetar[i] = wr[perm[n-nb+i]];
       tetai[i] = wi[perm[n-nb+i]];
-      ierr = PetscMemcpy(&SR[i*n], &(Q[perm[n-nb+i]*bn]), n*sizeof(PetscReal));CHKERRQ(ierr);
+      ierr = PetscArraycpy(&SR[i*n], &(Q[perm[n-nb+i]*bn]), n);CHKERRQ(ierr);
     }
   }
   ierr = PetscFree(modul);CHKERRQ(ierr);

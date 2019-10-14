@@ -3,7 +3,7 @@ import config.package
 class Configure(config.package.Package):
   def __init__(self, framework):
     config.package.Package.__init__(self, framework)
-    self.gitcommit         = 'v2.0.2-p1'
+    self.gitcommit         = 'v2.0.2-p2'
     self.download         = ['git://https://bitbucket.org/petsc/pkg-scalapack','https://bitbucket.org/petsc/pkg-scalapack/get/'+self.gitcommit+'.tar.gz']
     self.downloaddirnames = ['petsc-pkg-scalapack','scalapack']
     self.includes         = []
@@ -42,7 +42,10 @@ class Configure(config.package.Package):
     g.write('CDEFS        = '+fdef+'\n')
     self.setCompilers.pushLanguage('FC')
     g.write('FC           = '+self.setCompilers.getCompiler()+'\n')
-    g.write('FCFLAGS      = '+self.setCompilers.getCompilerFlags().replace('-Wall','').replace('-Wshadow','').replace('-Mfree','')+'\n')
+    if config.setCompilers.Configure.isNAG(self.setCompilers.getLinker(), self.log):
+      g.write('FCFLAGS      =  -dusty -dcfuns '+self.setCompilers.getCompilerFlags().replace('-Wall','').replace('-Wshadow','').replace('-Mfree','')+'\n')
+    else:
+      g.write('FCFLAGS      = '+self.setCompilers.getCompilerFlags().replace('-Wall','').replace('-Wshadow','').replace('-Mfree','')+'\n')
     g.write('FCLOADER     = '+self.setCompilers.getLinker()+'\n')
     g.write('FCLOADFLAGS  = '+self.setCompilers.getLinkerFlags()+'\n')
     self.setCompilers.popLanguage()
@@ -62,15 +65,16 @@ class Configure(config.package.Package):
 
     if self.installNeeded('SLmake.inc'):
       try:
-        output,err,ret  = config.package.Package.executeShellCommand('cd '+self.packageDir+' && make cleanlib', timeout=2500, log = self.log)
+        output,err,ret  = config.package.Package.executeShellCommand('cd '+self.packageDir+' && '+self.make.make+' -f Makefile.parallel cleanlib', timeout=25, log = self.log)
       except RuntimeError as e:
         pass
       try:
         self.logPrintBox('Compiling and installing Scalapack; this may take several minutes')
         self.installDirProvider.printSudoPasswordMessage()
         libDir = os.path.join(self.installDir, self.libdir)
-        output,err,ret  = config.package.Package.executeShellCommand('cd '+self.packageDir+' && make lib && '+self.installSudo+'mkdir -p '+libDir+' && '+self.installSudo+'cp libscalapack.* '+libDir, timeout=2500, log = self.log)
+        output,err,ret  = config.package.Package.executeShellCommand('cd '+self.packageDir+' && '+self.make.make_jnp+' -f Makefile.parallel lib && '+self.installSudo+'mkdir -p '+libDir+' && '+self.installSudo+'cp libscalapack.* '+libDir, timeout=2500, log = self.log)
       except RuntimeError as e:
-        raise RuntimeError('Error running make on SCALAPACK: '+str(e))
+        self.logPrint('Error running make on SCALAPACK: '+str(e))
+        raise RuntimeError('Error running make on SCALAPACK')
       self.postInstall(output,'SLmake.inc')
     return self.installDir

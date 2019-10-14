@@ -14,7 +14,6 @@ typedef struct {
 
 PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
 {
-  const char    *names[8] = {"none", "ghosted", "mirror", "periodic", "twist", "DMBoundaryType", "DM_BOUNDARY_", NULL};
   PetscInt       n;
   PetscErrorCode ierr;
 
@@ -30,12 +29,12 @@ PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   options->filename[0]    = '\0';
 
   ierr = PetscOptionsBegin(comm, "", "Meshing Interpolation Test Options", "DMPLEX");CHKERRQ(ierr);
-  ierr = PetscOptionsInt("-dim", "The topological mesh dimension", "ex32.c", options->dim, &options->dim, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsRangeInt("-dim", "The topological mesh dimension", "ex32.c", options->dim, &options->dim, NULL,1,3);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-cell_simplex", "Use simplices if true, otherwise hexes", "ex32.c", options->cellSimplex, &options->cellSimplex, NULL);CHKERRQ(ierr);
   n    = 3;
   ierr = PetscOptionsIntArray("-faces", "Faces per direction", "ex32.c", options->faces, &n, NULL);CHKERRQ(ierr);
   n    = 3;
-  ierr = PetscOptionsEnumArray("-periodicity", "Periodicity per direction", "ex32.c", names, (PetscEnum *) options->periodicity, &n, &options->isPeriodic);CHKERRQ(ierr);
+  ierr = PetscOptionsEnumArray("-periodicity", "Periodicity per direction", "ex32.c", DMBoundaryTypes, (PetscEnum *) options->periodicity, &n, &options->isPeriodic);CHKERRQ(ierr);
   ierr = PetscOptionsString("-filename", "The mesh file", "ex32.c", options->filename, options->filename, PETSC_MAX_PATH_LEN, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();
   PetscFunctionReturn(0);

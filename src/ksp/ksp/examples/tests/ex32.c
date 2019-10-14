@@ -140,7 +140,7 @@ PetscErrorCode ComputeMatrix(DM da,Mat B)
 
   ierr       = PetscMalloc1(2*dof*dof+1,&v);CHKERRQ(ierr);
   v_neighbor = v + dof*dof;
-  ierr       = PetscMemzero(v,(2*dof*dof+1)*sizeof(PetscScalar));CHKERRQ(ierr);
+  ierr       = PetscArrayzero(v,2*dof*dof+1);CHKERRQ(ierr);
   k3         = 0;
   for (k1=0; k1<dof; k1++) {
     for (k2=0; k2<dof; k2++) {
@@ -148,7 +148,7 @@ PetscErrorCode ComputeMatrix(DM da,Mat B)
         v[k3]          = 2.0*(HxHydHz + HxHzdHy + HyHzdHx);
         v_neighbor[k3] = -HxHydHz;
       } else {
-        v[k3]          = k1/(dof*dof);;
+        v[k3]          = k1/(dof*dof);
         v_neighbor[k3] = k2/(dof*dof);
       }
       k3++;

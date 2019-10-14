@@ -353,7 +353,7 @@ PetscErrorCode DMShellSetMatrix(DM dm,Mat J)
 /*@C
    DMShellSetCreateMatrix - sets the routine to create a matrix associated with the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments:
 +  dm - the shell DM
@@ -375,7 +375,7 @@ PetscErrorCode DMShellSetCreateMatrix(DM dm,PetscErrorCode (*func)(DM,Mat*))
 /*@
    DMShellSetGlobalVector - sets a template global vector associated with the DMShell
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments:
 +  dm - shell DM
@@ -440,7 +440,7 @@ PetscErrorCode DMShellSetCreateGlobalVector(DM dm,PetscErrorCode (*func)(DM,Vec*
 /*@
    DMShellSetLocalVector - sets a template local vector associated with the DMShell
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments:
 +  dm - shell DM
@@ -495,7 +495,6 @@ PetscErrorCode DMShellSetLocalVector(DM dm,Vec X)
 @*/
 PetscErrorCode DMShellSetCreateLocalVector(DM dm,PetscErrorCode (*func)(DM,Vec*))
 {
-
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   dm->ops->createlocalvector = func;
@@ -505,7 +504,7 @@ PetscErrorCode DMShellSetCreateLocalVector(DM dm,PetscErrorCode (*func)(DM,Vec*)
 /*@C
    DMShellSetGlobalToLocal - Sets the routines used to perform a global to local scatter
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -522,6 +521,7 @@ PetscErrorCode DMShellSetCreateLocalVector(DM dm,PetscErrorCode (*func)(DM,Vec*)
 @*/
 PetscErrorCode DMShellSetGlobalToLocal(DM dm,PetscErrorCode (*begin)(DM,Vec,InsertMode,Vec),PetscErrorCode (*end)(DM,Vec,InsertMode,Vec)) {
   PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   dm->ops->globaltolocalbegin = begin;
   dm->ops->globaltolocalend = end;
   PetscFunctionReturn(0);
@@ -530,7 +530,7 @@ PetscErrorCode DMShellSetGlobalToLocal(DM dm,PetscErrorCode (*begin)(DM,Vec,Inse
 /*@C
    DMShellSetLocalToGlobal - Sets the routines used to perform a local to global scatter
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -547,6 +547,7 @@ PetscErrorCode DMShellSetGlobalToLocal(DM dm,PetscErrorCode (*begin)(DM,Vec,Inse
 @*/
 PetscErrorCode DMShellSetLocalToGlobal(DM dm,PetscErrorCode (*begin)(DM,Vec,InsertMode,Vec),PetscErrorCode (*end)(DM,Vec,InsertMode,Vec)) {
   PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   dm->ops->localtoglobalbegin = begin;
   dm->ops->localtoglobalend = end;
   PetscFunctionReturn(0);
@@ -555,7 +556,7 @@ PetscErrorCode DMShellSetLocalToGlobal(DM dm,PetscErrorCode (*begin)(DM,Vec,Inse
 /*@C
    DMShellSetLocalToLocal - Sets the routines used to perform a local to local scatter
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -572,6 +573,7 @@ PetscErrorCode DMShellSetLocalToGlobal(DM dm,PetscErrorCode (*begin)(DM,Vec,Inse
 @*/
 PetscErrorCode DMShellSetLocalToLocal(DM dm,PetscErrorCode (*begin)(DM,Vec,InsertMode,Vec),PetscErrorCode (*end)(DM,Vec,InsertMode,Vec)) {
   PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   dm->ops->localtolocalbegin = begin;
   dm->ops->localtolocalend = end;
   PetscFunctionReturn(0);
@@ -580,7 +582,7 @@ PetscErrorCode DMShellSetLocalToLocal(DM dm,PetscErrorCode (*begin)(DM,Vec,Inser
 /*@
    DMShellSetGlobalToLocalVecScatter - Sets a VecScatter context for global to local communication
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -596,8 +598,9 @@ PetscErrorCode DMShellSetGlobalToLocalVecScatter(DM dm, VecScatter gtol)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm,DM_CLASSID,1);
+  PetscValidHeaderSpecific(gtol,VEC_SCATTER_CLASSID,2);
   ierr = PetscObjectReference((PetscObject)gtol);CHKERRQ(ierr);
-  /* Call VecScatterDestroy() to avoid a memory leak in case of re-setting. */
   ierr = VecScatterDestroy(&shell->gtol);CHKERRQ(ierr);
   shell->gtol = gtol;
   PetscFunctionReturn(0);
@@ -606,7 +609,7 @@ PetscErrorCode DMShellSetGlobalToLocalVecScatter(DM dm, VecScatter gtol)
 /*@
    DMShellSetLocalToGlobalVecScatter - Sets a VecScatter context for local to global communication
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -622,8 +625,9 @@ PetscErrorCode DMShellSetLocalToGlobalVecScatter(DM dm, VecScatter ltog)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm,DM_CLASSID,1);
+  PetscValidHeaderSpecific(ltog,VEC_SCATTER_CLASSID,2);
   ierr = PetscObjectReference((PetscObject)ltog);CHKERRQ(ierr);
-  /* Call VecScatterDestroy() to avoid a memory leak in case of re-setting. */
   ierr = VecScatterDestroy(&shell->ltog);CHKERRQ(ierr);
   shell->ltog = ltog;
   PetscFunctionReturn(0);
@@ -632,7 +636,7 @@ PetscErrorCode DMShellSetLocalToGlobalVecScatter(DM dm, VecScatter ltog)
 /*@
    DMShellSetLocalToLocalVecScatter - Sets a VecScatter context for local to local communication
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -648,8 +652,9 @@ PetscErrorCode DMShellSetLocalToLocalVecScatter(DM dm, VecScatter ltol)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm,DM_CLASSID,1);
+  PetscValidHeaderSpecific(ltol,VEC_SCATTER_CLASSID,2);
   ierr = PetscObjectReference((PetscObject)ltol);CHKERRQ(ierr);
-  /* Call VecScatterDestroy() to avoid a memory leak in case of re-setting. */
   ierr = VecScatterDestroy(&shell->ltol);CHKERRQ(ierr);
   shell->ltol = ltol;
   PetscFunctionReturn(0);
@@ -658,7 +663,7 @@ PetscErrorCode DMShellSetLocalToLocalVecScatter(DM dm, VecScatter ltol)
 /*@C
    DMShellSetCoarsen - Set the routine used to coarsen the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -684,7 +689,7 @@ PetscErrorCode DMShellSetCoarsen(DM dm, PetscErrorCode (*coarsen)(DM,MPI_Comm,DM
 /*@C
    DMShellGetCoarsen - Get the routine used to coarsen the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Argument:
 .  dm - the shell DM
@@ -712,7 +717,7 @@ PetscErrorCode DMShellGetCoarsen(DM dm, PetscErrorCode (**coarsen)(DM,MPI_Comm,D
 /*@C
    DMShellSetRefine - Set the routine used to refine the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -738,7 +743,7 @@ PetscErrorCode DMShellSetRefine(DM dm, PetscErrorCode (*refine)(DM,MPI_Comm,DM*)
 /*@C
    DMShellGetRefine - Get the routine used to refine the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Argument:
 .  dm - the shell DM
@@ -766,7 +771,7 @@ PetscErrorCode DMShellGetRefine(DM dm, PetscErrorCode (**refine)(DM,MPI_Comm,DM*
 /*@C
    DMShellSetCreateInterpolation - Set the routine used to create the interpolation operator
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -792,7 +797,7 @@ PetscErrorCode DMShellSetCreateInterpolation(DM dm, PetscErrorCode (*interp)(DM,
 /*@C
    DMShellGetCreateInterpolation - Get the routine used to create the interpolation operator
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Argument:
 +  dm - the shell DM
@@ -820,7 +825,7 @@ PetscErrorCode DMShellGetCreateInterpolation(DM dm, PetscErrorCode (**interp)(DM
 /*@C
    DMShellSetCreateRestriction - Set the routine used to create the restriction operator
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -846,7 +851,7 @@ PetscErrorCode DMShellSetCreateRestriction(DM dm, PetscErrorCode (*restriction)(
 /*@C
    DMShellGetCreateRestriction - Get the routine used to create the restriction operator
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Argument:
 +  dm - the shell DM
@@ -874,7 +879,7 @@ PetscErrorCode DMShellGetCreateRestriction(DM dm, PetscErrorCode (**restriction)
 /*@C
    DMShellSetCreateInjection - Set the routine used to create the injection operator
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -893,14 +898,14 @@ PetscErrorCode DMShellSetCreateInjection(DM dm, PetscErrorCode (*inject)(DM,DM,M
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMSHELL,&isshell);CHKERRQ(ierr);
   if (!isshell) PetscFunctionReturn(0);
-  dm->ops->getinjection = inject;
+  dm->ops->createinjection = inject;
   PetscFunctionReturn(0);
 }
 
 /*@C
    DMShellGetCreateInjection - Get the routine used to create the injection operator
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Argument:
 +  dm - the shell DM
@@ -921,30 +926,14 @@ PetscErrorCode DMShellGetCreateInjection(DM dm, PetscErrorCode (**inject)(DM,DM,
   PetscValidHeaderSpecific(dm,DM_CLASSID,1);
   ierr = PetscObjectTypeCompare((PetscObject)dm,DMSHELL,&isshell);CHKERRQ(ierr);
   if (!isshell) SETERRQ(PetscObjectComm((PetscObject)dm),PETSC_ERR_SUP,"Can only use with DMSHELL type DMs");
-  *inject = dm->ops->getinjection;
+  *inject = dm->ops->createinjection;
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode DMHasCreateInjection_Shell(DM dm, PetscBool *flg)
-{
-  PetscErrorCode ierr;
-  PetscBool      isshell;
-
-  PetscFunctionBegin;
-  PetscValidHeaderSpecific(dm,DM_CLASSID,1);
-  PetscValidPointer(flg,2);
-  ierr = PetscObjectTypeCompare((PetscObject)dm,DMSHELL,&isshell);CHKERRQ(ierr);
-  if (!isshell) {
-    *flg = PETSC_FALSE;
-  } else {
-    *flg = dm->ops->getinjection ? PETSC_TRUE : PETSC_FALSE;
-  }
-  PetscFunctionReturn(0);
-}
 /*@C
    DMShellSetCreateFieldDecomposition - Set the routine used to create a decomposition of fields for the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -970,7 +959,7 @@ PetscErrorCode DMShellSetCreateFieldDecomposition(DM dm, PetscErrorCode (*decomp
 /*@C
    DMShellSetCreateDomainDecomposition - Set the routine used to create a domain decomposition for the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -996,7 +985,7 @@ PetscErrorCode DMShellSetCreateDomainDecomposition(DM dm, PetscErrorCode (*decom
 /*@C
    DMShellSetCreateDomainDecompositionScatters - Set the routine used to create the scatter contexts for domain decomposition with a shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -1022,7 +1011,7 @@ PetscErrorCode DMShellSetCreateDomainDecompositionScatters(DM dm, PetscErrorCode
 /*@C
    DMShellSetCreateSubDM - Set the routine used to create a sub DM from the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Arguments
 +  dm - the shell DM
@@ -1048,7 +1037,7 @@ PetscErrorCode DMShellSetCreateSubDM(DM dm, PetscErrorCode (*subdm)(DM,PetscInt,
 /*@C
    DMShellGetCreateSubDM - Get the routine used to create a sub DM from the shell DM
 
-   Logically Collective on DM
+   Logically Collective on dm
 
    Input Argument:
 +  dm - the shell DM
@@ -1130,8 +1119,6 @@ PETSC_EXTERN PetscErrorCode DMCreate_Shell(DM dm)
   ierr     = PetscNewLog(dm,&shell);CHKERRQ(ierr);
   dm->data = shell;
 
-  ierr = PetscObjectChangeTypeName((PetscObject)dm,DMSHELL);CHKERRQ(ierr);
-
   dm->ops->destroy            = DMDestroy_Shell;
   dm->ops->createglobalvector = DMCreateGlobalVector_Shell;
   dm->ops->createlocalvector  = DMCreateLocalVector_Shell;
@@ -1145,14 +1132,13 @@ PETSC_EXTERN PetscErrorCode DMCreate_Shell(DM dm)
   dm->ops->localtolocalbegin  = DMLocalToLocalBeginDefaultShell;
   dm->ops->localtolocalend    = DMLocalToLocalEndDefaultShell;
   dm->ops->createsubdm        = DMCreateSubDM_Shell;
-  dm->ops->hascreateinjection = DMHasCreateInjection_Shell;
   PetscFunctionReturn(0);
 }
 
 /*@
     DMShellCreate - Creates a shell DM object, used to manage user-defined problem data
 
-    Collective on MPI_Comm
+    Collective
 
     Input Parameter:
 .   comm - the processors that will share the global vector

@@ -48,7 +48,8 @@ static PetscErrorCode PCSetUp_SVD(PC pc)
   ierr = MatDestroy(&jac->A);CHKERRQ(ierr);
   ierr = MPI_Comm_size(((PetscObject)pc->pmat)->comm,&size);CHKERRQ(ierr);
   if (size > 1) {
-    Mat          redmat;
+    Mat redmat;
+
     ierr = MatCreateRedundantMatrix(pc->pmat,size,PETSC_COMM_SELF,MAT_INITIAL_MATRIX,&redmat);CHKERRQ(ierr);
     ierr = MatConvert(redmat,MATSEQDENSE,MAT_INITIAL_MATRIX,&jac->A);CHKERRQ(ierr);
     ierr = MatDestroy(&redmat);CHKERRQ(ierr);
@@ -359,13 +360,12 @@ static PetscErrorCode PCView_SVD(PC pc,PetscViewer viewer)
 
    Level: advanced
 
-  Concepts: SVD
-
   Options Database:
--  -pc_svd_zero_sing <rtol> Singular values smaller than this are treated as zero
-+  -pc_svd_monitor  Print information on the extreme singular values of the operator
++  -pc_svd_zero_sing <rtol> Singular values smaller than this are treated as zero
+-  -pc_svd_monitor  Print information on the extreme singular values of the operator
 
-  Developer Note: This implementation automatically creates a redundant copy of the
+  Developer Note:
+  This implementation automatically creates a redundant copy of the
    matrix on each process and uses a sequential SVD solve. Why does it do this instead
    of using the composable PCREDUNDANT object?
 

@@ -82,6 +82,33 @@ PetscErrorCode MatCreateVecs_Transpose(Mat A,Vec *r, Vec *l)
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode MatAXPY_Transpose(Mat Y,PetscScalar a,Mat X,MatStructure str)
+{
+  Mat_Transpose  *Ya = (Mat_Transpose*)Y->data;
+  Mat_Transpose  *Xa = (Mat_Transpose*)X->data;
+  Mat              M = Ya->A;
+  Mat              N = Xa->A;
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  ierr = MatAXPY(M,a,N,str);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+PetscErrorCode MatHasOperation_Transpose(Mat mat,MatOperation op,PetscBool *has)
+{
+  Mat_Transpose  *X = (Mat_Transpose*)mat->data;
+  PetscErrorCode ierr;
+  PetscFunctionBegin;
+
+  *has = PETSC_FALSE;
+  if (op == MATOP_MAT_MULT || op == MATOP_TRANSPOSE_MAT_MULT) {
+    ierr = MatHasOperation(X->A,op == MATOP_MAT_MULT ? MATOP_TRANSPOSE_MAT_MULT : MATOP_MAT_MULT,has);CHKERRQ(ierr);
+  }
+  else if (((void**)mat->ops)[op]) *has = PETSC_TRUE;
+  PetscFunctionReturn(0);
+}
+
 PetscErrorCode MatTransposeGetMat_Transpose(Mat A,Mat *M)
 {
   Mat_Transpose  *Aa = (Mat_Transpose*)A->data;
@@ -166,6 +193,8 @@ PetscErrorCode  MatCreateTranspose(Mat A,Mat *N)
   (*N)->ops->multtransposeadd = MatMultTransposeAdd_Transpose;
   (*N)->ops->duplicate        = MatDuplicate_Transpose;
   (*N)->ops->getvecs          = MatCreateVecs_Transpose;
+  (*N)->ops->axpy             = MatAXPY_Transpose;
+  (*N)->ops->hasoperation     = MatHasOperation_Transpose;
   (*N)->assembled             = PETSC_TRUE;
 
   ierr = PetscObjectComposeFunction((PetscObject)(*N),"MatTransposeGetMat_C",MatTransposeGetMat_Transpose);CHKERRQ(ierr);

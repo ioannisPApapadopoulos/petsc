@@ -29,8 +29,6 @@ PetscFunctionList MatList = 0;
 
   Level: intermediate
 
-.keywords: Mat, MatType, set, method
-
 .seealso: PCSetType(), VecSetType(), MatCreate(), MatType, Mat
 @*/
 PetscErrorCode  MatSetType(Mat mat, MatType matype)
@@ -57,7 +55,7 @@ PetscErrorCode  MatSetType(Mat mat, MatType matype)
   ierr = PetscObjectTypeCompare((PetscObject)mat,matype,&sametype);CHKERRQ(ierr);
   if (sametype) PetscFunctionReturn(0);
 
-  ierr =  PetscFunctionListFind(MatList,matype,&r);CHKERRQ(ierr);
+  ierr = PetscFunctionListFind(MatList,matype,&r);CHKERRQ(ierr);
   if (!r) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_ARG_UNKNOWN_TYPE,"Unknown Mat type given: %s",matype);
 
   if (mat->assembled && ((PetscObject)mat)->type_name) {
@@ -112,8 +110,6 @@ PetscErrorCode  MatSetType(Mat mat, MatType matype)
 
    Level: intermediate
 
-.keywords: Mat, MatType, get, method, name
-
 .seealso: MatSetType()
 @*/
 PetscErrorCode  MatGetType(Mat mat,MatType *type)
@@ -149,8 +145,6 @@ $     MatSetType(Mat,"my_mat")
 $     -mat_type my_mat
 
    Level: advanced
-
-.keywords: Mat, register
 
 .seealso: MatRegisterAll()
 

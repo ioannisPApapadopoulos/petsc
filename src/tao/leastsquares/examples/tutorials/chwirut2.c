@@ -432,7 +432,11 @@ PetscErrorCode RunSimulation(PetscReal *x, PetscInt i, PetscReal*f, AppCtx *user
 {
   PetscReal *t = user->t;
   PetscReal *y = user->y;
+#if defined(PETSC_USE_REAL_SINGLE)
+  *f = y[i] - exp(-x[0]*t[i])/(x[1] + x[2]*t[i]); /* expf() for single-precision breaks this example on freebsd, valgrind errors on linux */
+#else
   *f = y[i] - PetscExpScalar(-x[0]*t[i])/(x[1] + x[2]*t[i]);
+#endif
   return(0);
 }
 
@@ -448,7 +452,7 @@ PetscErrorCode StopWorkers(AppCtx *user)
   while(checkedin < user->size-1) {
     ierr = MPI_Recv(&f,1,MPIU_REAL,MPI_ANY_SOURCE,MPI_ANY_TAG,PETSC_COMM_WORLD,&status);CHKERRQ(ierr);
     checkedin++;
-    ierr = PetscMemzero(x,NPARAMETERS*sizeof(PetscReal));CHKERRQ(ierr);
+    ierr = PetscArrayzero(x,NPARAMETERS);CHKERRQ(ierr);
     ierr = MPI_Send(x,NPARAMETERS,MPIU_REAL,status.MPI_SOURCE,DIE_TAG,PETSC_COMM_WORLD);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
@@ -461,6 +465,7 @@ PetscErrorCode StopWorkers(AppCtx *user)
 
    test:
       nsize: 3
+      requires: !single
       args: -tao_smonitor -tao_max_it 100 -tao_type pounders -tao_gatol 1.e-5
 
 TEST*/

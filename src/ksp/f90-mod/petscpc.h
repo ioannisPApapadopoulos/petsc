@@ -144,6 +144,32 @@
       PetscEnum PC_EXOTIC_FACE
       PetscEnum PC_EXOTIC_WIREBASKET
       parameter (PC_EXOTIC_FACE=0,PC_EXOTIC_WIREBASKET=1)
+
+! PCDeflationSpaceType
+      PetscEnum PC_DEFLATION_SPACE_HAAR
+      PetscEnum PC_DEFLATION_SPACE_DB2
+      PetscEnum PC_DEFLATION_SPACE_DB4
+      PetscEnum PC_DEFLATION_SPACE_DB8
+      PetscEnum PC_DEFLATION_SPACE_DB16
+      PetscEnum PC_DEFLATION_SPACE_BIORTH22
+      PetscEnum PC_DEFLATION_SPACE_MEYER
+      PetscEnum PC_DEFLATION_SPACE_AGGREGATION
+      PetscEnum PC_DEFLATION_SPACE_USER
+      parameter (PC_DEFLATION_SPACE_HAAR = 0)
+      parameter (PC_DEFLATION_SPACE_DB2  = 1)
+      parameter (PC_DEFLATION_SPACE_DB4  = 2)
+      parameter (PC_DEFLATION_SPACE_DB8  = 3)
+      parameter (PC_DEFLATION_SPACE_DB16 = 4)
+      parameter (PC_DEFLATION_SPACE_BIORTH22 = 5)
+      parameter (PC_DEFLATION_SPACE_MEYER = 6)
+      parameter (PC_DEFLATION_SPACE_AGGREGATION = 7)
+      parameter (PC_DEFLATION_SPACE_USER = 8)
+! PCBDDCInterfaceExtType
+      PetscEnum PC_BDDC_INTERFACE_EXT_DIRICHLET
+      PetscEnum PC_BDDC_INTERFACE_EXT_LUMP
+      parameter (PC_BDDC_INTERFACE_EXT_DIRICHLET=0)
+      parameter (PC_BDDC_INTERFACE_EXT_LUMP=1)
+
 !
 ! PCFailedReason
 !

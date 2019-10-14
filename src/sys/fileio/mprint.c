@@ -432,7 +432,7 @@ PetscErrorCode PetscSynchronizedPrintf(MPI_Comm comm,const char format[],...)
       ierr = PetscFree(next->string);CHKERRQ(ierr);
       ierr = PetscMalloc1(next->size, &next->string);CHKERRQ(ierr);
       va_start(Argp,format);
-      ierr = PetscMemzero(next->string,next->size);CHKERRQ(ierr);
+      ierr = PetscArrayzero(next->string,next->size);CHKERRQ(ierr);
       ierr = PetscVSNPrintf(next->string,next->size,format, &fullLength,Argp);CHKERRQ(ierr);
       va_end(Argp);
     }
@@ -500,7 +500,7 @@ PetscErrorCode PetscSynchronizedFPrintf(MPI_Comm comm,FILE *fp,const char format
       ierr = PetscFree(next->string);CHKERRQ(ierr);
       ierr = PetscMalloc1(next->size, &next->string);CHKERRQ(ierr);
       va_start(Argp,format);
-      ierr = PetscMemzero(next->string,next->size);CHKERRQ(ierr);
+      ierr = PetscArrayzero(next->string,next->size);CHKERRQ(ierr);
       ierr = PetscVSNPrintf(next->string,next->size,format,&fullLength,Argp);CHKERRQ(ierr);
       va_end(Argp);
     }
@@ -512,7 +512,7 @@ PetscErrorCode PetscSynchronizedFPrintf(MPI_Comm comm,FILE *fp,const char format
     PetscSynchronizedFlush - Flushes to the screen output from all processors
     involved in previous PetscSynchronizedPrintf()/PetscSynchronizedFPrintf() calls.
 
-    Collective on MPI_Comm
+    Collective
 
     Input Parameters:
 +   comm - the communicator
@@ -596,8 +596,6 @@ PetscErrorCode PetscSynchronizedFlush(MPI_Comm comm,FILE *fd)
     Fortran Note:
     This routine is not supported in Fortran.
 
-   Concepts: printing^in parallel
-   Concepts: printf^in parallel
 
 .seealso: PetscPrintf(), PetscSynchronizedPrintf(), PetscViewerASCIIPrintf(),
           PetscViewerASCIISynchronizedPrintf(), PetscSynchronizedFlush()
@@ -633,16 +631,18 @@ PetscErrorCode PetscFPrintf(MPI_Comm comm,FILE* fd,const char format[],...)
 +   comm - the communicator
 -   format - the usual printf() format string
 
-   Level: intermediate
+    Level: intermediate
+
+    Notes:
+    PetscPrintf() supports some format specifiers that are unique to PETSc.
+    See the manual page for PetscFormatConvert() for details.
 
     Fortran Note:
     The call sequence is PetscPrintf(MPI_Comm, character(*), PetscErrorCode ierr) from Fortran.
     That is, you can only pass a single character string from Fortran.
 
-   Concepts: printing^in parallel
-   Concepts: printf^in parallel
 
-.seealso: PetscFPrintf(), PetscSynchronizedPrintf()
+.seealso: PetscFPrintf(), PetscSynchronizedPrintf(), PetscFormatConvert()
 @*/
 PetscErrorCode PetscPrintf(MPI_Comm comm,const char format[],...)
 {
@@ -711,7 +711,7 @@ PetscErrorCode PetscHelpPrintfDefault(MPI_Comm comm,const char format[],...)
 /*@C
     PetscSynchronizedFGets - Several processors all get the same line from a file.
 
-    Collective on MPI_Comm
+    Collective
 
     Input Parameters:
 +   comm - the communicator
@@ -747,7 +747,7 @@ PetscErrorCode PetscSynchronizedFGets(MPI_Comm comm,FILE *fp,size_t len,char str
   PetscFunctionReturn(0);
 }
 
-#if defined(PETSC_HAVE_CLOSURES)
+#if defined(PETSC_HAVE_CLOSURE)
 int (^SwiftClosure)(const char*) = 0;
 
 PetscErrorCode PetscVFPrintfToString(FILE *fd,const char format[],va_list Argp)
@@ -761,7 +761,7 @@ PetscErrorCode PetscVFPrintfToString(FILE *fd,const char format[],va_list Argp)
     size_t length;
     char   buff[PETSCDEFAULTBUFFERSIZE];
 
-    ierr = PetscVSNPrintf(buf,size(buff),format,&length,Argp);CHKERRQ(ierr);
+    ierr = PetscVSNPrintf(buff,sizeof(buff),format,&length,Argp);CHKERRQ(ierr);
     ierr = SwiftClosure(buff);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);

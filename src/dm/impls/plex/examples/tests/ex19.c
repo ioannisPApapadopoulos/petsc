@@ -31,11 +31,11 @@ static PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   options->doL2       = PETSC_FALSE;
 
   ierr = PetscOptionsBegin(comm, "", "Meshing Adaptation Options", "DMPLEX");CHKERRQ(ierr);
-  ierr = PetscOptionsInt("-dim", "The topological mesh dimension", "ex19.c", options->dim, &options->dim, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsRangeInt("-dim", "The topological mesh dimension", "ex19.c", options->dim, &options->dim, NULL,1,3);CHKERRQ(ierr);
   ierr = PetscOptionsString("-msh", "Name of the mesh filename if any", "ex19.c", options->mshNam, options->mshNam, PETSC_MAX_PATH_LEN, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsInt("-nbrVerEdge", "Number of vertices per edge if unit square/cube generated", "ex19.c", options->nbrVerEdge, &options->nbrVerEdge, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsBoundedInt("-nbrVerEdge", "Number of vertices per edge if unit square/cube generated", "ex19.c", options->nbrVerEdge, &options->nbrVerEdge, NULL,0);CHKERRQ(ierr);
   ierr = PetscOptionsString("-bdLabel", "Name of the label marking boundary facets", "ex19.c", options->bdLabel, options->bdLabel, PETSC_MAX_PATH_LEN, NULL);CHKERRQ(ierr);
-  ierr = PetscOptionsInt("-met", "Different choices of metric", "ex19.c", options->metOpt, &options->metOpt, NULL);CHKERRQ(ierr);
+  ierr = PetscOptionsBoundedInt("-met", "Different choices of metric", "ex19.c", options->metOpt, &options->metOpt, NULL,0);CHKERRQ(ierr);
   ierr = PetscOptionsReal("-hmax", "Max size prescribed by the metric", "ex19.c", options->hmax, &options->hmax, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsReal("-hmin", "Min size prescribed by the metric", "ex19.c", options->hmin, &options->hmin, NULL);CHKERRQ(ierr);
   ierr = PetscOptionsBool("-do_L2", "Test L2 projection", "ex19.c", options->doL2, &options->doL2, NULL);CHKERRQ(ierr);
@@ -92,7 +92,7 @@ static PetscErrorCode ComputeMetric(DM dm, AppCtx *user, Vec *metric)
   ierr = PetscCalloc1(PetscMax(3, dim),&lambda);CHKERRQ(ierr);
   ierr = DMGetCoordinateDM(dm, &cdm);CHKERRQ(ierr);
   ierr = DMClone(cdm, &mdm);CHKERRQ(ierr);
-  ierr = DMGetSection(cdm, &csec);CHKERRQ(ierr);
+  ierr = DMGetLocalSection(cdm, &csec);CHKERRQ(ierr);
 
   ierr = PetscSectionCreate(PetscObjectComm((PetscObject) dm), &msec);CHKERRQ(ierr);
   ierr = PetscSectionSetNumFields(msec, 1);CHKERRQ(ierr);
@@ -104,7 +104,7 @@ static PetscErrorCode ComputeMetric(DM dm, AppCtx *user, Vec *metric)
     ierr = PetscSectionSetFieldDof(msec, p, 0, Nd);CHKERRQ(ierr);
   }
   ierr = PetscSectionSetUp(msec);CHKERRQ(ierr);
-  ierr = DMSetSection(mdm, msec);CHKERRQ(ierr);
+  ierr = DMSetLocalSection(mdm, msec);CHKERRQ(ierr);
   ierr = PetscSectionDestroy(&msec);CHKERRQ(ierr);
 
   ierr = DMGetCoordinatesLocal(dm, &coordinates);CHKERRQ(ierr);

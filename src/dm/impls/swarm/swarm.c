@@ -25,7 +25,7 @@ const char DMSwarmPICField_cellid[] = "DMSwarm_cellid";
    DMSwarmVectorDefineField - Sets the field from which to define a Vec object
                              when DMCreateLocalVector(), or DMCreateGlobalVector() is called
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -206,7 +206,7 @@ static PetscErrorCode DMSwarmComputeMassMatrix_Private(DM dmc, DM dmf, Mat mass,
   ierr = PetscDSGetNumFields(prob, &Nf);CHKERRQ(ierr);
   ierr = PetscDSGetTotalDimension(prob, &totDim);CHKERRQ(ierr);
   ierr = PetscMalloc3(dim, &v0, dim*dim, &J, dim*dim,&invJ);CHKERRQ(ierr);
-  ierr = DMGetSection(dmf, &fsection);CHKERRQ(ierr);
+  ierr = DMGetLocalSection(dmf, &fsection);CHKERRQ(ierr);
   ierr = DMGetGlobalSection(dmf, &globalFSection);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dmf, 0, &cStart, &cEnd);CHKERRQ(ierr);
   ierr = MatGetLocalSize(mass, &locRows, &locCols);CHKERRQ(ierr);
@@ -291,7 +291,7 @@ static PetscErrorCode DMSwarmComputeMassMatrix_Private(DM dmc, DM dmf, Mat mass,
       }
       ierr = PetscFEGetTabulation((PetscFE) obj, numCIndices, xi, &Bcoarse, NULL, NULL);CHKERRQ(ierr);
       /* Get elemMat entries by multiplying by weight */
-      ierr = PetscMemzero(elemMat, numCIndices*totDim * sizeof(PetscScalar));CHKERRQ(ierr);
+      ierr = PetscArrayzero(elemMat, numCIndices*totDim);CHKERRQ(ierr);
       for (i = 0; i < numFIndices; ++i) {
         for (p = 0; p < numCIndices; ++p) {
           for (c = 0; c < Nc; ++c) {
@@ -342,7 +342,7 @@ static PetscErrorCode DMCreateMassMatrix_Swarm(DM dmCoarse, DM dmFine, Mat *mass
 /*@C
    DMSwarmCreateGlobalVectorFromField - Creates a Vec object sharing the array associated with a given field
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -371,7 +371,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmCreateGlobalVectorFromField(DM dm,const char 
 /*@C
    DMSwarmDestroyGlobalVectorFromField - Destroys the Vec object which share the array associated with a given field
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -396,7 +396,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmDestroyGlobalVectorFromField(DM dm,const char
 /*@C
    DMSwarmCreateLocalVectorFromField - Creates a Vec object sharing the array associated with a given field
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -425,7 +425,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmCreateLocalVectorFromField(DM dm,const char f
 /*@C
    DMSwarmDestroyLocalVectorFromField - Destroys the Vec object which share the array associated with a given field
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -462,7 +462,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmRestoreGlobalVectorFromFields(DM dm,Vec *vec)
 /*@C
    DMSwarmInitializeFieldRegister - Initiates the registration of fields to a DMSwarm
 
-   Collective on DM
+   Collective on dm
 
    Input parameter:
 .  dm - a DMSwarm
@@ -492,7 +492,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmInitializeFieldRegister(DM dm)
 /*@C
    DMSwarmFinalizeFieldRegister - Finalizes the registration of fields to a DMSwarm
 
-   Collective on DM
+   Collective on dm
 
    Input parameter:
 .  dm - a DMSwarm
@@ -547,7 +547,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmSetLocalSizes(DM dm,PetscInt nlocal,PetscInt 
 /*@C
    DMSwarmSetCellDM - Attachs a DM to a DMSwarm
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -573,7 +573,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmSetCellDM(DM dm,DM dmcell)
 /*@C
    DMSwarmGetCellDM - Fetches the attached cell DM
 
-   Collective on DM
+   Collective on dm
 
    Input parameter:
 .  dm - a DMSwarm
@@ -622,7 +622,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmGetLocalSize(DM dm,PetscInt *nlocal)
 /*@C
    DMSwarmGetSize - Retrives the total length of fields registered
 
-   Collective on DM
+   Collective on dm
 
    Input parameter:
 .  dm - a DMSwarm
@@ -653,7 +653,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmGetSize(DM dm,PetscInt *n)
 /*@C
    DMSwarmRegisterPetscDatatypeField - Register a field to a DMSwarm with a native PETSc data type
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -700,7 +700,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmRegisterPetscDatatypeField(DM dm,const char f
 /*@C
    DMSwarmRegisterUserStructField - Register a user defined struct to a DMSwarm
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -728,7 +728,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmRegisterUserStructField(DM dm,const char fiel
 /*@C
    DMSwarmRegisterUserDatatypeField - Register a user defined data type to a DMSwarm
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - a DMSwarm
@@ -976,7 +976,7 @@ PetscErrorCode DMSwarmMigrate_Basic(DM dm,PetscBool remove_sent_points)
 /*@C
    DMSwarmMigrate - Relocates points defined in the DMSwarm to other MPI-ranks
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - the DMSwarm
@@ -1035,7 +1035,7 @@ PetscErrorCode DMSwarmMigrate_GlobalToLocal_Basic(DM dm,PetscInt *globalsize);
    DMSwarmCollectViewCreate - Applies a collection method and gathers points
    in neighbour MPI-ranks into the DMSwarm
 
-   Collective on DM
+   Collective on dm
 
    Input parameter:
 .  dm - the DMSwarm
@@ -1081,7 +1081,7 @@ PETSC_EXTERN PetscErrorCode DMSwarmCollectViewCreate(DM dm)
 /*@C
    DMSwarmCollectViewDestroy - Resets the DMSwarm to the size prior to calling DMSwarmCollectViewCreate()
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 .  dm - the DMSwarm
@@ -1122,7 +1122,7 @@ PetscErrorCode DMSwarmSetUpPIC(DM dm)
 /*@C
    DMSwarmSetType - Set particular flavor of DMSwarm
 
-   Collective on DM
+   Collective on dm
 
    Input parameters:
 +  dm - the DMSwarm
@@ -1287,7 +1287,7 @@ PetscErrorCode DMView_Swarm(DM dm, PetscViewer viewer)
  (c) the block size of the data.
 
  For example, suppose the application requires a unique id, energy, momentum and density to be stored
- on a set of of particles. Then the following code could be used
+ on a set of particles. Then the following code could be used
 
 $    DMSwarmInitializeFieldRegister(dm)
 $    DMSwarmRegisterPetscDatatypeField(dm,"uid",1,PETSC_LONG);
@@ -1307,8 +1307,8 @@ $    DMSwarmFinalizeFieldRegister(dm)
  before calling DMCreateGlobalVector() or DMCreateLocalVector(), the user must inform DMSwarm which
  fields should be used to define a Vec object via
    DMSwarmVectorDefineField()
- The specified field can can changed be changed at any time - thereby permitting vectors
- compatable with different fields to be created.
+ The specified field can be changed at any time - thereby permitting vectors
+ compatible with different fields to be created.
 
  A dual representation of fields in the DMSwarm and a Vec object is permitted via
    DMSwarmCreateGlobalVectorFromField()
@@ -1355,7 +1355,7 @@ PETSC_EXTERN PetscErrorCode DMCreate_Swarm(DM dm)
   dm->ops->setfromoptions                  = NULL;
   dm->ops->clone                           = NULL;
   dm->ops->setup                           = DMSetup_Swarm;
-  dm->ops->createdefaultsection            = NULL;
+  dm->ops->createlocalsection              = NULL;
   dm->ops->createdefaultconstraints        = NULL;
   dm->ops->createglobalvector              = DMCreateGlobalVector_Swarm;
   dm->ops->createlocalvector               = DMCreateLocalVector_Swarm;
@@ -1365,8 +1365,7 @@ PETSC_EXTERN PetscErrorCode DMCreate_Swarm(DM dm)
   dm->ops->getcoloring                     = NULL;
   dm->ops->creatematrix                    = NULL;
   dm->ops->createinterpolation             = NULL;
-  dm->ops->getaggregates                   = NULL;
-  dm->ops->getinjection                    = NULL;
+  dm->ops->createinjection                 = NULL;
   dm->ops->createmassmatrix                = DMCreateMassMatrix_Swarm;
   dm->ops->refine                          = NULL;
   dm->ops->coarsen                         = NULL;

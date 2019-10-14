@@ -129,6 +129,7 @@ static PetscErrorCode CreateSpectralPlanes(DM dm, PetscInt numPlanes, const Pets
     ierr = PetscSNPrintf(name, PETSC_MAX_PATH_LEN, "spectral_plane_%D", p);CHKERRQ(ierr);
     ierr = DMCreateLabel(dm, name);CHKERRQ(ierr);
     ierr = DMGetLabel(dm, name, &label);CHKERRQ(ierr);
+    ierr = DMLabelAddStratum(label, 1);CHKERRQ(ierr);
     for (v = vStart; v < vEnd; ++v) {
       PetscInt off;
 
@@ -208,7 +209,7 @@ static PetscErrorCode SetupPrimalProblem(DM dm, AppCtx *user)
   ierr = PetscDSSetResidual(prob, 0, f0_trig_u, f1_u);CHKERRQ(ierr);
   ierr = PetscDSSetJacobian(prob, 0, 0, NULL, NULL, NULL, g3_uu);CHKERRQ(ierr);
   ierr = PetscDSAddBoundary(prob, DM_BC_ESSENTIAL, "wall", "marker", 0, 0, NULL, (void (*)(void)) trig_u, 1, &id, user);CHKERRQ(ierr);
-  ierr = PetscDSSetExactSolution(prob, 0, trig_u);CHKERRQ(ierr);
+  ierr = PetscDSSetExactSolution(prob, 0, trig_u, user);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -281,7 +282,7 @@ static PetscErrorCode ComputeSpectral(DM dm, Vec u, PetscInt numPlanes, const Pe
   ierr = DMGlobalToLocalEnd(dm, u, INSERT_VALUES, uloc);CHKERRQ(ierr);
   ierr = DMPlexInsertBoundaryValues(dm, PETSC_TRUE, uloc, 0.0, NULL, NULL, NULL);CHKERRQ(ierr);
   ierr = VecViewFromOptions(uloc, NULL, "-sol_view");CHKERRQ(ierr);
-  ierr = DMGetDefaultSection(dm, &section);CHKERRQ(ierr);
+  ierr = DMGetLocalSection(dm, &section);CHKERRQ(ierr);
   ierr = VecGetArrayRead(uloc, &array);CHKERRQ(ierr);
   ierr = DMGetCoordinatesLocal(dm, &coordinates);CHKERRQ(ierr);
   ierr = DMGetCoordinateSection(dm, &coordSection);CHKERRQ(ierr);
@@ -454,11 +455,11 @@ int main(int argc, char **argv)
       if (0) {
         PetscSection sec;
 
-        ierr = DMGetSection(dms[0], &sec);CHKERRQ(ierr);
+        ierr = DMGetLocalSection(dms[0], &sec);CHKERRQ(ierr);
         ierr = PetscSectionView(sec, PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-        ierr = DMGetSection(dms[1], &sec);CHKERRQ(ierr);
+        ierr = DMGetLocalSection(dms[1], &sec);CHKERRQ(ierr);
         ierr = PetscSectionView(sec, PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-        ierr = DMGetSection(dmErrAux, &sec);CHKERRQ(ierr);
+        ierr = DMGetLocalSection(dmErrAux, &sec);CHKERRQ(ierr);
         ierr = PetscSectionView(sec, PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
       }
       ierr = DMViewFromOptions(dmErrAux, NULL, "-dm_err_view");CHKERRQ(ierr);

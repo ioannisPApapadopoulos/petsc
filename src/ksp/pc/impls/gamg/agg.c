@@ -27,8 +27,6 @@ typedef struct {
 
    Level: intermediate
 
-   Concepts: Aggregation AMG preconditioner
-
 .seealso: ()
 @*/
 PetscErrorCode PCGAMGSetNSmooths(PC pc, PetscInt n)
@@ -59,14 +57,12 @@ static PetscErrorCode PCGAMGSetNSmooths_AGG(PC pc, PetscInt n)
 
    Input Parameters:
 +  pc - the preconditioner context
-.  n - PETSC_TRUE or PETSC_FALSE
+-  n - PETSC_TRUE or PETSC_FALSE
 
    Options Database Key:
 .  -pc_gamg_sym_graph <true,default=false> - symmetrize the graph before computing the aggregation
 
    Level: intermediate
-
-   Concepts: Aggregation AMG preconditioner
 
 .seealso: PCGAMGSetSquareGraph()
 @*/
@@ -107,8 +103,6 @@ static PetscErrorCode PCGAMGSetSymGraph_AGG(PC pc, PetscBool n)
    Squaring the graph increases the rate of coarsening (aggressive coarsening) and thereby reduces the complexity of the coarse grids, and generally results in slower solver converge rates. Reducing coarse grid complexity reduced the complexity of Galerkin coarse grid construction considerably.
 
    Level: intermediate
-
-   Concepts: Aggregation AMG preconditioner
 
 .seealso: PCGAMGSetSymGraph(), PCGAMGSetThreshold()
 @*/
@@ -408,7 +402,7 @@ static PetscErrorCode smoothAggs(PC pc,Mat Gmat_2, Mat Gmat_1,PetscCoarsenData *
               SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_PLIB,"found node %D times???",hav);
             }
           } else {            /* I'm stealing this local, owned by a ghost */
-            if (sgid != -1) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Have un-symmetric graph (apparently). Use '-%spc_gamg_sym_graph true' to symetrize the graph or '-%spc_gamg_threshold -1' if the matrix is structurally symmetric.",((PetscObject)pc)->prefix,((PetscObject)pc)->prefix);
+            if (sgid != -1) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_PLIB,"Mat has an un-symmetric graph. Use '-%spc_gamg_sym_graph true' to symmetrize the graph or '-%spc_gamg_threshold -1' if the matrix is structurally symmetric.",((PetscObject)pc)->prefix ? ((PetscObject)pc)->prefix : "",((PetscObject)pc)->prefix ? ((PetscObject)pc)->prefix : "");
             ierr = PetscCDAppendID(aggs_2, lid, lidj+my0);CHKERRQ(ierr);
           }
         }
@@ -993,8 +987,8 @@ static PetscErrorCode PCGAMGProlongator_AGG(PC pc,Mat Amat,Mat Gmat,PetscCoarsen
   ierr = MatSetSizes(Prol,nloc*bs,nLocalSelected*col_bs,PETSC_DETERMINE,PETSC_DETERMINE);CHKERRQ(ierr);
   ierr = MatSetBlockSizes(Prol, bs, col_bs);CHKERRQ(ierr);
   ierr = MatSetType(Prol, mtype);CHKERRQ(ierr);
-  ierr = MatSeqAIJSetPreallocation(Prol, col_bs, NULL);CHKERRQ(ierr);
-  ierr = MatMPIAIJSetPreallocation(Prol,col_bs, NULL,col_bs, NULL);CHKERRQ(ierr);
+  ierr = MatSeqAIJSetPreallocation(Prol,col_bs, NULL);CHKERRQ(ierr);
+  ierr = MatMPIAIJSetPreallocation(Prol,col_bs, NULL, col_bs, NULL);CHKERRQ(ierr);
 
   /* can get all points "removed" */
   ierr =  MatGetSize(Prol, &kk, &ii);CHKERRQ(ierr);

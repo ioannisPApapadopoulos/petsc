@@ -28,7 +28,15 @@ class Package(config.base.Configure):
     self.lib              = []
     self.dlib             = []   # all libraries in this package and all those it depends on
     self.directory        = None # path of the package installation point; for example /usr/local or /home/bsmith/mpich-2.0.1
-    self.version          = ''
+
+    self.version          = ''   # the version of the package that PETSc will build with the --download-package option
+    self.versionname      = ''   # string name that appears in package include file, for example HYPRE_RELEASE_VERSION
+    self.versioninclude   = ''   # include file that contains package version information; if not provided uses includes[0]
+    self.minversion       = ''   # minimum version of the package that is supported
+    self.maxversion       = ''   # maximum version of the package that is supported
+    self.foundversion     = ''   # version of the package actually found
+    self.version_tuple    = ''   # version of the package actually found (tuple)
+    self.requiresversion  = 0    # error if the version information is not found
 
     # These are specified for the package
     self.required               = 0    # 1 means the package is required
@@ -39,6 +47,7 @@ class Package(config.base.Configure):
     self.useddirectly           = 1    # 1 indicates used by PETSc directly, 0 indicates used by a package used by PETSc
     self.linkedbypetsc          = 1    # 1 indicates PETSc shared libraries (and PETSc executables) need to link against this library
     self.gitcommit              = None # Git commit to use for downloads
+    self.gitcommitmaster        = None # Git commit to use for petsc/master or similar non-release branches
     self.download               = []   # list of URLs where repository or tarballs may be found (git is tested before tarballs)
     self.deps                   = []   # other packages whose dlib or include we depend on, usually we also use self.framework.require()
     self.odeps                  = []   # dependent packages that are optional
@@ -59,6 +68,7 @@ class Package(config.base.Configure):
     self.license                = None # optional license text
     self.excludedDirs           = []   # list of directory names that could be false positives, SuperLU_DIST when looking for SuperLU
     self.downloadonWindows      = 0  # 1 means the --download-package works on Microsoft Windows
+    self.requirescxx14          = 0
     self.requirescxx11          = 0
     self.publicInstall          = 1  # Installs the package in the --prefix directory if it was given. Packages that are only used
                                      # during the configuration/installation process such as sowing, make etc should be marked as 0
@@ -71,9 +81,10 @@ class Package(config.base.Configure):
     self.skippackagewithoptions = 0  # packages like fblaslapack and MPICH do not support --with-package* options so do not print them in help
     self.alternativedownload    = [] # Used by, for example mpi.py to print useful error messages, which does not support --download-mpi but one can use --download-mpich
     self.requirec99flag         = 0  # package must be compiled with C99 flags
+    self.usesopenmp             = 'no'  # yes, no, unknow package is built to use OpenMP
 
     # Outside coupling
-    self.defaultInstallDir      = os.path.abspath('externalpackages')
+    self.defaultInstallDir      = ''
     self.installSudo            = '' # if user does not have write access to prefix directory then this is set to sudo
 
     self.isMPI                  = 0 # Is an MPI implementation, needed to check for compiler wrappers
@@ -81,8 +92,11 @@ class Package(config.base.Configure):
     self.hastestsdatafiles      = 0 # indicates that PETSc make all tests has tests for this package that require DATAFILESPATH to be set
     self.makerulename           = '' # some packages do too many things with the make stage; this allows a package to limit to, for example, just building the libraries
     self.installedpetsc         = 0
-    self.installwithbatch       = 0  # install the package even though configure is running in the initial batch mode; f2blaslapack and fblaslapack for example
+    self.installwithbatch       = 1  # install the package even though configure in the batch mode; f2blaslapack and fblaslapack for example
     self.builtafterpetsc        = 0  # package is compiled/installed after PETSc is compiled
+
+    self.downloaded             = 0  # 1 indicates that this package is being downloaded during this run (internal use only)
+    self.executablename         = '' # full path of executable, for example cmake, bfort etc
     return
 
   def __str__(self):
@@ -90,15 +104,25 @@ class Package(config.base.Configure):
     output = ''
     if self.found:
       output = self.name+':\n'
-      if self.version: output += '  Version:  '+self.version+'\n'
+      if self.foundversion:
+        if hasattr(self,'versiontitle'):
+          output += '  '+self.versiontitle+':  '+self.foundversion+'\n'
+        else:
+          output += '  Version:  '+self.foundversion+'\n'
+      else:
+        if self.version: output += '  Version:  '+self.version+'\n'
       if self.include: output += '  Includes: '+self.headers.toStringNoDupes(self.include)+'\n'
       if self.lib:     output += '  Library:  '+self.libraries.toStringNoDupes(self.lib)+'\n'
+      if self.executablename: output += '  '+getattr(self,self.executablename)+'\n'
+      if self.usesopenmp == 'yes': output += '  uses OpenMP; use export OMP_NUM_THREADS=<p> or -omp_num_threads <p> to control the number of threads\n'
+      if self.usesopenmp == 'unknown': output += '  Unkown if this uses OpenMP (try export OMP_NUM_THREADS=<1-4> yourprogram -log_view) \n'
     return output
 
   def setupDependencies(self, framework):
     config.base.Configure.setupDependencies(self, framework)
     self.setCompilers    = framework.require('config.setCompilers', self)
     self.compilers       = framework.require('config.compilers', self)
+    self.fortran         = framework.require('config.compilersFortran', self)
     self.compilerFlags   = framework.require('config.compilerFlags', self)
     self.types           = framework.require('config.types', self)
     self.headers         = framework.require('config.headers', self)
@@ -230,7 +254,7 @@ class Package(config.base.Configure):
   def removeWarningFlags(self,flags):
     outflags = []
     for flag in flags.split():
-      if not flag in ['-Wall','-Wwrite-strings','-Wno-strict-aliasing','-Wno-unknown-pragmas','-Wno-unused-variable','-Wno-unused-dummy-argument','-fvisibility=hidden']:
+      if not flag in ['-Wall','-Wwrite-strings','-Wno-strict-aliasing','-Wno-unknown-pragmas','-Wno-unused-variable','-Wno-unused-dummy-argument','-fvisibility=hidden','-std=c89','-pedantic']:
         outflags.append(flag)
     return ' '.join(outflags)
 
@@ -264,13 +288,12 @@ class Package(config.base.Configure):
     return
   arch = property(getArch, setArch, doc = 'The architecture identifier')
 
+  # This construct should be removed and just have getInstallDir() handle the process
   def getDefaultInstallDir(self):
     '''The installation directroy of the library'''
     if hasattr(self, 'installDirProvider'):
       if hasattr(self.installDirProvider, 'dir'):
         return self.installDirProvider.dir
-    elif not self.framework.externalPackagesDir is None:
-      return self.framework.externalPackagesDir
     return self._defaultInstallDir
   def setDefaultInstallDir(self, defaultInstallDir):
     '''The installation directory of the library'''
@@ -297,12 +320,15 @@ class Package(config.base.Configure):
     return ['']
 
   def getInstallDir(self):
+    '''Returns --prefix (or the value computed from --package-prefix-hash) if provided otherwise $PETSC_DIR/$PETSC_ARCH'''
+    '''Special case for packages such as sowing that are have self.publicInstall == 0 it always locates them in $PETSC_DIR/$PETSC_ARCH'''
+    '''Special special case if --package-prefix-hash then even self.publicInstall == 0 are installed in the prefix location'''
     self.confDir    = self.installDirProvider.confDir  # private install location; $PETSC_DIR/$PETSC_ARCH for PETSc
     self.packageDir = self.getDir()
     if not self.packageDir: self.packageDir = self.downLoad()
     self.updateGitDir()
     self.updatehgDir()
-    if self.publicInstall:
+    if (self.publicInstall or 'package-prefix-hash' in self.argDB) and not ('package-prefix-hash' in self.argDB and (hasattr(self,'postProcess') or self.builtafterpetsc)):
       self.installDir = self.defaultInstallDir
       self.installSudo= self.installDirProvider.installSudo
     else:
@@ -360,7 +386,60 @@ class Package(config.base.Configure):
       return [inc for inc in iDirs if os.path.exists(inc)]
     return os.path.join(prefix, includeDir)
 
+  def checkPackageInDefaultLocations(self,mess):
+    '''This does not work for the reasons below so is turned off; perhaps the simplier model of just use ls'''
+    '''to look for the offending library files and includes files would work'''
+    '''Errors if the package is found by the compiler in a default location, such as /usr/local'''
+    '''This will miss some cases with libraries, for example if --download-hdf5 --download-pnetcdf is used because'''
+    '''it has to remove the current install directory from the search path where hdf5 is stored, hence even if pnetcdf is in /usr/lib'''
+    '''the test will fail since its required dependency hdf5 cannot be found. If the include file is found it will still detect the problem'''
+    self.logPrint(self.PACKAGE+': Checking if package is already installed in default locations, will error if this is the case')
+
+    # need to remove the PETSc prefix library and include locations from the search otherwise it will find the packages
+    # own previous install and think it is in the default location. Note: The configure model for handling libs and include
+    # directories by simply shoving them into global variables is terrible, but we are stuck with it.
+    self.pushLanguage('Cxx')
+    flagsArg = self.getPreprocessorFlagsArg()
+    oldLibs = self.setCompilers.LIBS
+    oldincludes = getattr(self.compilers, flagsArg)
+    loc = self.defaultInstallDir
+    newLibs = ' '.join([x for x in oldLibs.split(' ') if not x == '-L'+loc])
+    newincludes = ' '.join([x for x in oldincludes.split(' ') if not x == '-I'+loc])
+    self.setCompilers.LIBS = newLibs
+    setattr(self.compilers, flagsArg, newincludes)
+
+    for lib in self.generateLibList(''):
+      if not lib: continue
+      self.logWrite('Checking for '+str(lib)+' in "default locations" '+newLibs+'\n')
+      self.logWrite('Checking for '+str(self.includes)+' in "default locations" '+newincludes+'\n')
+      self.libraries.saveLog()
+      if self.executeTest(self.libraries.check,[lib, self.functions],{'fortranMangle' : self.functionsFortran, 'cxxMangle' : self.functionsCxx[0], 'prototype' : self.functionsCxx[1], 'call' : self.functionsCxx[2], 'cxxLink': self.cxx}) or (self.includes and self.checkInclude([], self.includes)):
+        self.logWrite(self.libraries.restoreLog())
+        raise RuntimeError('You requested that PETSc '+mess+' but configure has detected the package already installed in a compiler default location\n\
+(for example /usr/ or /usr/local) you must remove this installation to use the install you desire')
+      else:
+        self.logWrite(self.libraries.restoreLog())
+
+    self.logPrint(self.PACKAGE+': Not already installed in default locations')
+    # put back the old list of libs and includes
+    setattr(self.compilers, flagsArg, oldincludes)
+    self.setCompilers.LIBS = oldLibs
+    self.popLanguage()
+
+  def addToArgs(self,args,key,value):
+    found = 0
+    for i in range(0,len(args)):
+      if args[i].startswith(key+'='):
+        args[i] = args[i][0:-1] + ' '+ value +'"'
+        found = 1
+    if not found: args.append(key+'="'+value+'"')
+
   def generateGuesses(self):
+    #if 'download-'+self.package in self.argDB and self.argDB['download-'+self.package]:
+      #self.checkPackageInDefaultLocations('install '+self.package)
+    #if not self.package == 'mpi' and 'with-'+self.package+'-dir' in self.argDB and not self.argDB['with-'+self.package+'-dir'] == os.path.join('/usr','local'):
+      #self.checkPackageInDefaultLocations('use '+self.package+' installed at '+self.argDB['with-'+self.package+'-dir'])
+
     d = self.checkDownload()
     if d:
       if not self.liblist or not self.liblist[0] or self.builtafterpetsc :
@@ -383,7 +462,7 @@ class Package(config.base.Configure):
 
       l,err,ret  = config.base.Configure.executeShellCommand('pkg-config '+self.pkgname+' --libs', timeout=5, log = self.log)
       l = l.strip()
-      i,err,ret  = config.base.Configure.executeShellCommand('pkg-config '+self.pkgname+' --variable=includedir', timeout=5, log = self.log)
+      i,err,ret  = config.base.Configure.executeShellCommand('pkg-config '+self.pkgname+' --cflags', timeout=5, log = self.log)
       i = i.strip()
       if self.argDB['with-'+self.package+'-pkg-config']:
         if path: os.environ['PKG_CONFIG_PATH'] = path
@@ -480,8 +559,13 @@ class Package(config.base.Configure):
     '''Check if we should download the package, returning the install directory or the empty string indicating installation'''
     if not self.download:
       return ''
-    if self.framework.batchBodies and not self.installwithbatch:
-      return
+    if self.argDB['with-batch'] and self.argDB['download-'+self.package] and not (hasattr(self.setCompilers,'cross_cc') or self.installwithbatch): raise RuntimeError('--download-'+self.name+' cannot be used on batch systems. You must either\n\
+    1) load the appropriate module on your system and use --with-'+self.name+' or \n\
+    2) locate its installation on your machine or install it yourself and use --with-'+self.name+'-dir=path\n')
+
+    if 'package-prefix-hash' in self.argDB and self.argDB['package-prefix-hash'] == 'reuse' and not hasattr(self,'postProcess') and not self.builtafterpetsc: # package already built in prefix hash location so reuse it
+      self.installDir = self.defaultInstallDir
+      return self.defaultInstallDir
     if self.argDB['download-'+self.package]:
       if self.license and not os.path.isfile('.'+self.package+'_license'):
         self.logClear()
@@ -506,6 +590,9 @@ class Package(config.base.Configure):
     makefileSaved  = os.path.join(self.confDir, 'lib','petsc','conf','pkg.conf.'+self.package)
     gcommfile      = os.path.join(self.packageDir, 'pkg.gitcommit')
     gcommfileSaved = os.path.join(self.confDir,'lib','petsc','conf', 'pkg.gitcommit.'+self.package)
+    if self.downloaded:
+      self.log.write(self.PACKAGE+' was just downloaded, forcing a rebuild because cannot determine if package has changed\n')
+      return 1
     if not os.path.isfile(makefileSaved) or not (self.getChecksum(makefileSaved) == self.getChecksum(makefile)):
       self.log.write('Have to rebuild '+self.PACKAGE+', '+makefile+' != '+makefileSaved+'\n')
       return 1
@@ -578,14 +665,16 @@ class Package(config.base.Configure):
           config.base.Configure.executeShellCommand([self.sourceControl.git, 'fetch'], cwd=self.packageDir, log = self.log)
         except:
           raise RuntimeError('Unable to fetch '+self.gitcommit+' in repository '+self.packageDir+
-                             '.\nTo use previous git snapshot - use: --download-'+self.package+'gitcommit=HEAD')
+                             '.\nTo use previous git snapshot - use: --download-'+self.package+'-commit=HEAD')
       try:
         gitcommit_hash,err,ret = config.base.Configure.executeShellCommand([self.sourceControl.git, 'rev-parse', self.gitcommit], cwd=self.packageDir, log = self.log)
       except:
-        raise RuntimeError('Unable to locate commit: '+self.gitcommit+' in repository: '+self.packageDir+'.\n If its a remote branch- use: origin/'+self.gitcommit)
+        raise RuntimeError('Unable to locate commit: '+self.gitcommit+' in repository: '+self.packageDir+'.\n\
+If its a commit/tag that is not found - perhaps the repo URL changed. If so, delete '+self.packageDir+' and rerun configure.\n\
+If its a remote branch, use: origin/'+self.gitcommit+' for commit.')
       if self.gitcommit != 'HEAD':
         try:
-          config.base.Configure.executeShellCommand([self.sourceControl.git, 'stash'], cwd=self.packageDir, log = self.log)
+          config.base.Configure.executeShellCommand([self.sourceControl.git, '-c', 'user.name=petsc-configure', '-c', 'user.email=petsc@configure', 'stash'], cwd=self.packageDir, log = self.log)
           config.base.Configure.executeShellCommand([self.sourceControl.git, 'clean', '-f', '-d', '-x'], cwd=self.packageDir, log = self.log)
         except:
           raise RuntimeError('Unable to run git stash/clean in repository: '+self.packageDir+'.\nPerhaps its a git error!')
@@ -605,25 +694,26 @@ class Package(config.base.Configure):
     if not os.path.isdir(packages):
       os.makedirs(packages)
       self.framework.actions.addArgument('Framework', 'Directory creation', 'Created the external packages directory: '+packages)
-    Dir = None
+    Dir = []
     pkgdirs = os.listdir(packages)
     gitpkg  = 'git.'+self.package
     hgpkg  = 'hg.'+self.package
     self.logPrint('Looking for '+self.PACKAGE+' at '+gitpkg+ ', '+hgpkg+' or a directory starting with '+str(self.downloaddirnames))
     if hasattr(self.sourceControl, 'git') and gitpkg in pkgdirs:
-      Dir = gitpkg
-    elif hasattr(self.sourceControl, 'hg') and hgpkg in pkgdirs:
-      Dir = hgpkg
-    else:
-      for d in pkgdirs:
-        for j in self.downloaddirnames:
-          if d.startswith(j) and os.path.isdir(os.path.join(packages, d)) and not self.matchExcludeDir(d):
-            Dir = d
-            break
-        if Dir: break
+      Dir.append(gitpkg)
+    if hasattr(self.sourceControl, 'hg') and hgpkg in pkgdirs:
+      Dir.append(hgpkg)
+    for d in pkgdirs:
+      for j in self.downloaddirnames:
+        if d.startswith(j) and os.path.isdir(os.path.join(packages, d)) and not self.matchExcludeDir(d):
+          Dir.append(d)
+
+    if len(Dir) > 1:
+      raise RuntimeError('Located multiple directories with package '+self.package+' '+str(Dir)+'\nDelete directory '+self.arch+' and rerun ./configure')
+
     if Dir:
-      self.logPrint('Found a copy of '+self.PACKAGE+' in '+str(Dir))
-      return os.path.join(packages, Dir)
+      self.logPrint('Found a copy of '+self.PACKAGE+' in '+str(Dir[0]))
+      return os.path.join(packages, Dir[0])
     else:
       self.logPrint('Could not locate an existing copy of '+self.PACKAGE+':')
       self.logPrint('  '+str(pkgdirs))
@@ -665,7 +755,7 @@ class Package(config.base.Configure):
     err =''
     for url in download_urls:
       if url.startswith('git://'):
-        if not self.gitcommit: raise RuntimeError(self.PACKAGE+': giturl specified but gitcommit not set')
+        if not self.gitcommit: raise RuntimeError(self.PACKAGE+': giturl specified but commit not set')
         if not self.gitPreReqCheck():
           err += 'Git prerequisite check failed for url: '+url+'\n'
           self.logPrint('Git prerequisite check failed - required for url: '+url+'\n')
@@ -680,6 +770,7 @@ class Package(config.base.Configure):
           raise RuntimeError('Could not locate downloaded package ' +self.PACKAGE +' in '+self.externalPackagesDir)
         self.framework.actions.addArgument(self.PACKAGE, 'Download', 'Downloaded '+self.PACKAGE+' into '+pkgdir)
         retriever.restoreLog()
+        self.downloaded = 1
         return pkgdir
       except RuntimeError as e:
         self.logPrint('ERROR: '+str(e))
@@ -796,7 +887,7 @@ class Package(config.base.Configure):
         self.executeTest(self.libraries.check,[lib, self.functionsDefine],{'otherLibs' : self.dlib, 'fortranMangle' : self.functionsFortran, 'cxxMangle' : self.functionsCxx[0], 'prototype' : self.functionsCxx[1], 'call' : self.functionsCxx[2], 'cxxLink': self.cxx, 'functionDefine': 1})
         self.logWrite(self.libraries.restoreLog())
         self.logPrint('Checking for headers '+location+': '+str(incl))
-        if (not self.includes) or self.checkInclude(incl, self.includes, self.dinclude, timeout = 1800.0):
+        if (not self.includes) or self.checkInclude(incl, self.includes, self.dinclude, timeout = 40.0):
           if self.includes:
             self.include = testedincl
           self.found     = 1
@@ -823,7 +914,6 @@ class Package(config.base.Configure):
     pass
 
   def consistencyChecks(self):
-    if self.skippackagewithoptions: return
     if 'with-'+self.package+'-dir' in self.argDB and ('with-'+self.package+'-include' in self.argDB or 'with-'+self.package+'-lib' in self.argDB):
       raise RuntimeError('Specify either "--with-'+self.package+'-dir" or "--with-'+self.package+'-lib --with-'+self.package+'-include". But not both!')
 
@@ -833,12 +923,13 @@ class Package(config.base.Configure):
         if pkg.has64bitindices and self.requires32bitintblas:
           blaslapackconflict = 1
 
-    # if user did not request option, then turn it off it conflicts with configuration
+    # if user did not request option, then turn it off if conflicts with configuration
     if self.lookforbydefault and 'with-'+self.package not in self.framework.clArgDB:
       if (self.cxx and not hasattr(self.compilers, 'CXX')) or \
          (self.fc and not hasattr(self.compilers, 'FC')) or \
          (self.noMPIUni and self.mpi.usingMPIUni) or \
-         (self.requirescxx11 and self.compilers.cxxdialect != 'C++11') or \
+         (self.requirescxx14 and self.compilers.cxxdialect not in ['C++14']) or \
+         (self.requirescxx11 and self.compilers.cxxdialect not in ['C++11','C++14']) or \
          (not self.defaultPrecision.lower() in self.precisions) or \
          (not self.complex and self.defaultScalarType.lower() == 'complex') or \
          (self.defaultIndexSize == 64 and self.requires32bitint) or \
@@ -854,18 +945,115 @@ class Package(config.base.Configure):
         raise RuntimeError('Cannot use '+self.name+' without Fortran, make sure you do NOT have --with-fc=0')
       if self.noMPIUni and self.mpi.usingMPIUni:
         raise RuntimeError('Cannot use '+self.name+' with MPIUNI, you need a real MPI')
-      if self.requirescxx11 and self.compilers.cxxdialect != 'C++11':
+      if self.requirescxx14 and self.compilers.cxxdialect not in ['C++14']:
+        raise RuntimeError('Cannot use '+self.name+' without enabling C++14, see --with-cxx-dialect=C++14')
+      if self.requirescxx11 and self.compilers.cxxdialect not in ['C++11','C++14']:
         raise RuntimeError('Cannot use '+self.name+' without enabling C++11, see --with-cxx-dialect=C++11')
       if self.download and self.argDB.get('download-'+self.downloadname.lower()) and not self.downloadonWindows and (self.setCompilers.CC.find('win32fe') >= 0):
         raise RuntimeError('External package '+self.name+' does not support --download-'+self.downloadname.lower()+' with Microsoft compilers')
       if not self.defaultPrecision.lower() in self.precisions:
-        raise RuntimeError('Cannot use '+self.name+' with '+self.defaultPrecision.lower()+', it is either not coded for this capability or petsc interface does not work in this mode')
+        raise RuntimeError('Cannot use '+self.name+' with '+self.defaultPrecision.lower()+', it is not available in this precision')
       if not self.complex and self.defaultScalarType.lower() == 'complex':
         raise RuntimeError('Cannot use '+self.name+' with complex numbers it is not coded for this capability')
       if self.defaultIndexSize == 64 and self.requires32bitint:
         raise RuntimeError('Cannot use '+self.name+' with 64 bit integers, it is not coded for this capability')
     if not self.download and 'download-'+self.downloadname.lower() in self.argDB and self.argDB['download-'+self.downloadname.lower()]:
       raise RuntimeError('External package '+self.name+' does not support --download-'+self.downloadname.lower())
+    return
+
+  def versionToStandardForm(self,version):
+    '''Returns original string'''
+    '''This can be overloaded by packages that have their own unique representation of versions; for example CUDA'''
+    return version
+
+  def versionToTuple(self,version):
+    '''Converts string of the form x.y to (x,y)'''
+    if not version: return ()
+    return tuple(map(int,version.split('.')))
+
+  def checkVersion(self):
+    '''Uses self.version, self.minversion, self.maxversion, self.versionname, and self.versioninclude to determine if package has required version'''
+    def dropPatch(str):
+      '''Drops the patch version number in a version if it exists'''
+      if str.find('.') == str.rfind('.'): return str
+      return str[0:str.rfind('.')]
+    def zeroPatch(str):
+      '''Replaces the patch version number in a version if it exists with 0'''
+      if str.find('.') == str.rfind('.'): return str
+      return str[0:str.rfind('.')]+'.0'
+    def infinitePatch(str):
+      '''Replaces the patch version number in a version if it exists with a very large number'''
+      if str.find('.') == str.rfind('.'): return str
+      return str[0:str.rfind('.')]+'.100000'
+
+    if not self.version and not self.minversion and not self.maxversion and not self.versionname: return
+    if not self.versioninclude:
+      if not self.includes: return
+      self.versioninclude = self.includes[0]
+    oldFlags = self.compilers.CPPFLAGS
+    self.compilers.CPPFLAGS += ' '+self.headers.toString(self.include)
+    if self.cxx:
+      self.pushLanguage('C++')
+    else:
+      self.pushLanguage(self.defaultLanguage)
+    try:
+      output = self.outputPreprocess('#include "'+self.versioninclude+'"\nversion='+self.versionname+'\n')
+    except:
+      self.log.write('For '+self.package+' unable to run preprocessor to obtain version information, skipping version check\n')
+      self.popLanguage()
+      self.compilers.CPPFLAGS = oldFlags
+      return
+    self.popLanguage()
+    self.compilers.CPPFLAGS = oldFlags
+    loutput = output.split('\n')
+    version = ''
+    for i in loutput:
+      if i.startswith('version='):
+        version = i[8:]
+        break
+      if i.startswith('version ='):
+        version = i[9:]
+        break
+    if not version:
+      self.log.write('For '+self.package+' unable to find version information: output below, skipping version check\n')
+      self.log.write(output)
+      if self.requiresversion:
+        raise RuntimeError('Configure must be able to determined the version information for '+self.name+'. It was unable to, please send configure.log to petsc-maint@mcs.anl.gov')
+      return
+    version = version.replace(' ','').replace('\"','')
+    try:
+      self.foundversion = self.versionToStandardForm(version)
+      self.version_tuple = self.versionToTuple(self.foundversion)
+    except:
+      self.log.write('For '+self.package+' unable to convert version to standard form, skipping version check\n')
+      if self.requiresversion:
+        raise RuntimeError('Configure must be able to determined the version information for '+self.name+'. It was unable to, please send configure.log to petsc-maint@mcs.anl.gov')
+      return
+
+    self.log.write('For '+self.package+' need '+self.minversion+' <= '+self.foundversion+' <= '+self.maxversion+'\n')
+
+    try:
+      foundversiontuple = self.versionToTuple(self.foundversion)
+    except:
+      self.log.write('For '+self.package+' unable to convert version string to tuple, skipping version check\n')
+      if self.requiresversion:
+        raise RuntimeError('Configure must be able to determined the version information for '+self.name+'. It was unable to, please send configure.log to petsc-maint@mcs.anl.gov')
+      return
+
+    suggest = ''
+    if self.download: suggest = '\nSuggest using --download-'+self.package+' for a compatible '+self.name
+    if self.minversion:
+      if self.versionToTuple(self.minversion) > foundversiontuple:
+        raise RuntimeError(self.package+' version is '+self.foundversion+' this version of PETSc needs at least '+self.minversion+suggest+'\n')
+    elif self.version:
+      if self.versionToTuple(zeroPatch(self.version)) > foundversiontuple:
+        self.logPrintBox('Warning: Using version '+self.foundversion+' of package '+self.package+' PETSc is tested with '+dropPatch(self.version)+suggest)
+    if self.maxversion:
+      if self.versionToTuple(self.maxversion) < foundversiontuple:
+        raise RuntimeError(self.package+' version is '+self.foundversion+' this version of PETSc needs at most '+self.maxversion+suggest+'\n')
+    elif self.version:
+      if self.versionToTuple(infinitePatch(self.version)) < foundversiontuple:
+        self.logPrintBox('Warning: Using version '+self.foundversion+' of package '+self.package+' PETSc is tested with '+dropPatch(self.version)+suggest)
     return
 
   def configure(self):
@@ -876,6 +1064,8 @@ class Package(config.base.Configure):
         self.download = [downloadPackageVal]
     if self.download and self.argDB['download-'+self.downloadname.lower()+'-commit']:
       self.gitcommit = self.argDB['download-'+self.downloadname.lower()+'-commit']
+    elif self.gitcommitmaster and not self.petscdir.versionRelease:
+      self.gitcommit = self.gitcommitmaster
     if not 'with-'+self.package in self.argDB:
       self.argDB['with-'+self.package] = 0
     if 'with-'+self.package+'-dir' in self.argDB or 'with-'+self.package+'-include' in self.argDB or 'with-'+self.package+'-lib' in self.argDB:
@@ -889,6 +1079,8 @@ class Package(config.base.Configure):
       self.libraries.pushLanguage(self.defaultLanguage)
       self.executeTest(self.checkDependencies)
       self.executeTest(self.configureLibrary)
+      if not self.builtafterpetsc:
+        self.executeTest(self.checkVersion)
       self.executeTest(self.checkSharedLibrary)
       self.libraries.popLanguage()
     else:
@@ -916,7 +1108,7 @@ class Package(config.base.Configure):
       mpicxx = os.path.join(installDir,"bin",mpicxxName)
       if not os.path.isfile(mpicxx): raise RuntimeError('Could not locate installed MPI compiler: '+mpicxx)
     if hasattr(self.compilers, 'FC'):
-      if self.compilers.fortranIsF90:
+      if self.fortran.fortranIsF90:
         mpifc = os.path.join(installDir,"bin",mpif90Name)
       else:
         mpifc = os.path.join(installDir,"bin",mpif77Name)
@@ -943,6 +1135,18 @@ class Package(config.base.Configure):
     for i in rejectstarts:
       rejects.extend([arg for arg in args if arg.startswith(i)])
     return self.rmArgs(args,rejects)
+
+  def addArgStartsWith(self,args,sw,value):
+    keep = []
+    found = 0
+    for i in args:
+      if i.startswith(sw+'="'):
+        i = i[:-1] + ' ' + value + '"'
+        found = 1
+      keep.append(i)
+    if not found:
+      keep.append(sw+'="' + value + '"')
+    return keep
 
   def checkSharedLibrariesEnabled(self):
     if self.havePETSc:
@@ -1253,6 +1457,7 @@ Brief overview of how BuildSystem\'s configuration of packages works.
 class GNUPackage(Package):
   def __init__(self, framework):
     Package.__init__(self,framework)
+    self.builddir = 'no' # requires build be done in a subdirectory, not in the directory tree
     return
 
   def setupHelp(self, help):
@@ -1272,17 +1477,24 @@ class GNUPackage(Package):
     args.append('--libdir='+os.path.join(self.installDir,self.libdir))
     ## compiler args
     self.pushLanguage('C')
-    compiler = self.getCompiler()
-    args.append('CC="'+self.getCompiler()+'"')
+    if not self.installwithbatch and hasattr(self.setCompilers,'cross_cc'):
+      args.append('CC="'+self.setCompilers.cross_cc+'"')
+    else:
+      args.append('CC="'+self.getCompiler()+'"')
     args.append('CFLAGS="'+self.removeWarningFlags(self.getCompilerFlags())+'"')
     args.append('AR="'+self.setCompilers.AR+'"')
     args.append('ARFLAGS="'+self.setCompilers.AR_FLAGS+'"')
+    if not self.installwithbatch and hasattr(self.setCompilers,'cross_LIBS'):
+      args.append('LIBS="'+self.setCompilers.cross_LIBS+'"')
     if self.setCompilers.LDFLAGS:
       args.append('LDFLAGS="'+self.setCompilers.LDFLAGS+'"')
     self.popLanguage()
     if hasattr(self.compilers, 'CXX'):
       self.pushLanguage('Cxx')
-      args.append('CXX="'+self.getCompiler()+'"')
+      if not self.installwithbatch and hasattr(self.setCompilers,'cross_CC'):
+        args.append('CXX="'+self.setCompilers.cross_CC+'"')
+      else:
+        args.append('CXX="'+self.getCompiler()+'"')
       args.append('CXXFLAGS="'+self.removeWarningFlags(self.getCompilerFlags())+'"')
       self.popLanguage()
     else:
@@ -1290,7 +1502,7 @@ class GNUPackage(Package):
     if hasattr(self.compilers, 'FC'):
       self.pushLanguage('FC')
       fc = self.getCompiler()
-      if self.compilers.fortranIsF90:
+      if self.fortran.fortranIsF90:
         try:
           output, error, status = self.executeShellCommand(fc+' -v', log = self.log)
           output += error
@@ -1300,13 +1512,20 @@ class GNUPackage(Package):
           fc = os.path.join(os.path.dirname(fc), 'xlf')
           self.log.write('Using IBM f90 compiler, switching to xlf for compiling ' + self.PACKAGE + '\n')
         # now set F90
-        args.append('F90="'+fc+'"')
+        if not self.installwithbatch and hasattr(self.setCompilers,'cross_fc'):
+          args.append('F90="'+self.setCompilers.cross_fc+'"')
+        else:
+          args.append('F90="'+fc+'"')
         args.append('F90FLAGS="'+self.removeWarningFlags(self.getCompilerFlags()).replace('-Mfree','')+'"')
       else:
         args.append('--disable-f90')
-      args.append('F77="'+fc+'"')
       args.append('FFLAGS="'+self.removeWarningFlags(self.getCompilerFlags()).replace('-Mfree','')+'"')
-      args.append('FC="'+fc+'"')
+      if not self.installwithbatch and hasattr(self.setCompilers,'cross_fc'):
+        args.append('FC="'+self.setCompilers.cross_fc+'"')
+        args.append('F77="'+self.setCompilers.cross_fc+'"')
+      else:
+        args.append('FC="'+fc+'"')
+        args.append('F77="'+fc+'"')
       args.append('FCFLAGS="'+self.removeWarningFlags(self.getCompilerFlags()).replace('-Mfree','')+'"')
       self.popLanguage()
     else:
@@ -1322,23 +1541,8 @@ class GNUPackage(Package):
     return args
 
   def Install(self):
-    # hypre had configure inside src directory ugh
-    if not os.path.isfile(os.path.join(self.packageDir,'configure')) and not os.path.isfile(os.path.join(self.packageDir,'src','configure')):
-      if not self.programs.autoreconf:
-        raise RuntimeError('autoreconf required for ' + self.PACKAGE+' not found (or broken)!')
-      if not self.programs.libtoolize:
-        raise RuntimeError('libtoolize required for ' + self.PACKAGE+' not found!')
-      try:
-        self.logPrintBox('Running autoreconf on ' +self.PACKAGE+'; this may take several minutes')
-        output,err,ret  = config.base.Configure.executeShellCommand(self.programs.libtoolize, cwd=self.packageDir, timeout=100, log=self.log)
-        if ret:
-          raise RuntimeError('Error in libtoolize: ' + str(e))
-        output,err,ret  = config.base.Configure.executeShellCommand([self.programs.autoreconf, '--force', '--install'], cwd=self.packageDir, timeout=200, log = self.log)
-      except RuntimeError as e:
-        raise RuntimeError('Error running autoreconf on ' + self.PACKAGE+': '+str(e))
-
     ##### getInstallDir calls this, and it sets up self.packageDir (source download), self.confDir and self.installDir
-    args = self.formGNUConfigureArgs()
+    args = self.formGNUConfigureArgs()  # allow package to change self.packageDir
     if self.download and self.argDB['download-'+self.downloadname.lower()+'-configure-arguments']:
        args.append(self.argDB['download-'+self.downloadname.lower()+'-configure-arguments'])
     args = ' '.join(args)
@@ -1349,12 +1553,49 @@ class GNUPackage(Package):
     ### Use conffile to check whether a reconfigure/rebuild is required
     if not self.installNeeded(conffile):
       return self.installDir
+
+    if not os.path.isfile(os.path.join(self.packageDir,'configure')):
+      if not self.programs.autoreconf:
+        raise RuntimeError('autoreconf required for ' + self.PACKAGE+' not found (or broken)! Use your package manager to install autoconf')
+      if not self.programs.libtoolize:
+        raise RuntimeError('libtoolize required for ' + self.PACKAGE+' not found! Use your package manager to install libtool')
+      try:
+        self.logPrintBox('Running libtoolize on ' +self.PACKAGE+'; this may take several minutes')
+        output,err,ret  = config.base.Configure.executeShellCommand(self.programs.libtoolize, cwd=self.packageDir, timeout=100, log=self.log)
+        if ret:
+          raise RuntimeError('Error in libtoolize: ' + str(e))
+        self.logPrintBox('Running autoreconf on ' +self.PACKAGE+'; this may take several minutes')
+        output,err,ret  = config.base.Configure.executeShellCommand([self.programs.autoreconf, '--force', '--install'], cwd=self.packageDir, timeout=200, log = self.log)
+        if ret:
+          raise RuntimeError('Error in autoreconf: ' + str(e))
+      except RuntimeError as e:
+        raise RuntimeError('Error running libtoolize or autoreconf on ' + self.PACKAGE+': '+str(e))
+
+    if self.builddir == 'yes':
+      folder = os.path.join(self.packageDir, 'petsc-build')
+      if os.path.isdir(folder):
+        import shutil
+        shutil.rmtree(folder)
+      os.mkdir(folder)
+      self.packageDir = folder
+      dot = '..'
+    else:
+      dot = '.'
+
     ### Configure and Build package
     try:
       self.logPrintBox('Running configure on ' +self.PACKAGE+'; this may take several minutes')
-      output1,err1,ret1  = config.base.Configure.executeShellCommand('./configure '+args, cwd=self.packageDir, timeout=2000, log = self.log)
+      output1,err1,ret1  = config.base.Configure.executeShellCommand(dot+'/configure '+args, cwd=self.packageDir, timeout=2000, log = self.log)
     except RuntimeError as e:
-      raise RuntimeError('Error running configure on ' + self.PACKAGE+': '+str(e))
+      self.logPrint('Error running configure on ' + self.PACKAGE+': '+str(e))
+      try:
+        with open(os.path.join(self.packageDir,'config.log')) as fd:
+          conf = fd.read()
+          fd.close()
+          self.logPrint('Output in config.log for ' + self.PACKAGE+': '+conf)
+      except:
+        pass
+      raise RuntimeError('Error running configure on ' + self.PACKAGE)
     try:
       self.logPrintBox('Running make on '+self.PACKAGE+'; this may take several minutes')
       if self.parallelMake: pmake = self.make.make_jnp+' '+self.makerulename+' '
@@ -1366,7 +1607,8 @@ class GNUPackage(Package):
       self.installDirProvider.printSudoPasswordMessage(self.installSudo)
       output4,err4,ret4  = config.base.Configure.executeShellCommand(self.installSudo+self.make.make+' install', cwd=self.packageDir, timeout=1000, log = self.log)
     except RuntimeError as e:
-      raise RuntimeError('Error running make; make install on '+self.PACKAGE+': '+str(e))
+      self.logPrint('Error running make; make install on '+self.PACKAGE+': '+str(e))
+      raise RuntimeError('Error running make; make install on '+self.PACKAGE)
     self.postInstall(output1+err1+output2+err2+output3+err3+output4+err4, conffile)
     return self.installDir
 
@@ -1457,13 +1699,15 @@ class CMakePackage(Package):
         self.logPrintBox('Configuring '+self.PACKAGE+' with cmake, this may take several minutes')
         output1,err1,ret1  = config.package.Package.executeShellCommand(self.cmake.cmake+' .. '+args, cwd=folder, timeout=900, log = self.log)
       except RuntimeError as e:
-        raise RuntimeError('Error configuring '+self.PACKAGE+' with cmake '+str(e))
+        self.logPrint('Error configuring '+self.PACKAGE+' with cmake '+str(e))
+        raise RuntimeError('Error configuring '+self.PACKAGE+' with cmake')
       try:
         self.logPrintBox('Compiling and installing '+self.PACKAGE+'; this may take several minutes')
         self.installDirProvider.printSudoPasswordMessage()
         output2,err2,ret2  = config.package.Package.executeShellCommand(self.make.make_jnp+' '+self.makerulename, cwd=folder, timeout=3000, log = self.log)
         output3,err3,ret3  = config.package.Package.executeShellCommand(self.installSudo+' '+self.make.make+' install', cwd=folder, timeout=3000, log = self.log)
       except RuntimeError as e:
-        raise RuntimeError('Error running make on  '+self.PACKAGE+': '+str(e))
+        self.logPrint('Error running make on  '+self.PACKAGE+': '+str(e))
+        raise RuntimeError('Error running make on  '+self.PACKAGE)
       self.postInstall(output1+err1+output2+err2+output3+err3,conffile)
     return self.installDir

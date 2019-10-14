@@ -104,7 +104,7 @@ PetscErrorCode VecMDot_MPIViennaCL(Vec xin,PetscInt nv,const Vec y[],PetscScalar
 
   Level: beginner
 
-.seealso: VecCreate(), VecSetType(), VecSetFromOptions(), VecCreateMpiWithArray(), VECMPI, VecType, VecCreateMPI(), VecCreateMpi()
+.seealso: VecCreate(), VecSetType(), VecSetFromOptions(), VecCreateMPIWithArray(), VECMPI, VecType, VecCreateMPI(), VecCreateMPI()
 M*/
 
 
@@ -201,8 +201,10 @@ PETSC_EXTERN PetscErrorCode VecCreate_MPIViennaCL(Vec vv)
      get values?
   */
   ierr = VecViennaCLAllocateCheck(vv);CHKERRQ(ierr);
-  vv->valid_GPU_array      = PETSC_OFFLOAD_GPU;
+  ierr = VecViennaCLAllocateCheckHost(vv);CHKERRQ(ierr);
   ierr = VecSet(vv,0.0);CHKERRQ(ierr);
+  ierr = VecSet_Seq(vv,0.0);CHKERRQ(ierr);
+  vv->offloadmask = PETSC_OFFLOAD_BOTH;
   PetscFunctionReturn(0);
 }
 

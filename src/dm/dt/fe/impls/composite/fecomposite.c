@@ -3,7 +3,7 @@
 #include <petsc/private/dmpleximpl.h> /* For CellRefiner */
 #include <petscblaslapack.h>
 
-PetscErrorCode PetscFEDestroy_Composite(PetscFE fem)
+static PetscErrorCode PetscFEDestroy_Composite(PetscFE fem)
 {
   PetscFE_Composite *cmp = (PetscFE_Composite *) fem->data;
   PetscErrorCode     ierr;
@@ -15,7 +15,7 @@ PetscErrorCode PetscFEDestroy_Composite(PetscFE fem)
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode PetscFESetUp_Composite(PetscFE fem)
+static PetscErrorCode PetscFESetUp_Composite(PetscFE fem)
 {
   PetscFE_Composite *cmp = (PetscFE_Composite *) fem->data;
   DM                 K;
@@ -97,7 +97,7 @@ PetscErrorCode PetscFESetUp_Composite(PetscFE fem)
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode PetscFEGetTabulation_Composite(PetscFE fem, PetscInt npoints, const PetscReal points[], PetscReal *B, PetscReal *D, PetscReal *H)
+static PetscErrorCode PetscFEGetTabulation_Composite(PetscFE fem, PetscInt npoints, const PetscReal points[], PetscReal *B, PetscReal *D, PetscReal *H)
 {
   PetscFE_Composite *cmp = (PetscFE_Composite *) fem->data;
   DM                 dm;
@@ -140,9 +140,9 @@ PetscErrorCode PetscFEGetTabulation_Composite(PetscFE fem, PetscInt npoints, con
   if (H) {ierr = DMGetWorkArray(dm, npoints*spdim*dim*dim, MPIU_REAL, &tmpH);CHKERRQ(ierr);}
   ierr = PetscSpaceEvaluate(fem->basisSpace, npoints, points, B ? tmpB : NULL, D ? tmpD : NULL, H ? tmpH : NULL);CHKERRQ(ierr);
   /* Translate to the nodal basis */
-  if (B) {ierr = PetscMemzero(B, npoints*pdim*comp * sizeof(PetscReal));CHKERRQ(ierr);}
-  if (D) {ierr = PetscMemzero(D, npoints*pdim*comp*dim * sizeof(PetscReal));CHKERRQ(ierr);}
-  if (H) {ierr = PetscMemzero(H, npoints*pdim*comp*dim*dim * sizeof(PetscReal));CHKERRQ(ierr);}
+  if (B) {ierr = PetscArrayzero(B, npoints*pdim*comp);CHKERRQ(ierr);}
+  if (D) {ierr = PetscArrayzero(D, npoints*pdim*comp*dim);CHKERRQ(ierr);}
+  if (H) {ierr = PetscArrayzero(H, npoints*pdim*comp*dim*dim);CHKERRQ(ierr);}
   for (p = 0; p < npoints; ++p) {
     const PetscInt s = subpoints[p];
 
@@ -191,7 +191,7 @@ PetscErrorCode PetscFEGetTabulation_Composite(PetscFE fem, PetscInt npoints, con
   PetscFunctionReturn(0);
 }
 
-PetscErrorCode PetscFEInitialize_Composite(PetscFE fem)
+static PetscErrorCode PetscFEInitialize_Composite(PetscFE fem)
 {
   PetscFunctionBegin;
   fem->ops->setfromoptions          = NULL;

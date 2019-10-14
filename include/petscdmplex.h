@@ -1,9 +1,10 @@
 /*
   DMPlex, for parallel unstructured distributed mesh problems.
 */
-#if !defined(__PETSCDMPLEX_H)
-#define __PETSCDMPLEX_H
+#if !defined(PETSCDMPLEX_H)
+#define PETSCDMPLEX_H
 
+#include <petscsection.h>
 #include <petscdm.h>
 #include <petscdmplextypes.h>
 #include <petscdt.h>
@@ -64,7 +65,9 @@ PETSC_EXTERN PetscErrorCode DMPlexSetConeSize(DM, PetscInt, PetscInt);
 PETSC_EXTERN PetscErrorCode DMPlexAddConeSize(DM, PetscInt, PetscInt);
 PETSC_EXTERN PetscErrorCode DMPlexGetCone(DM, PetscInt, const PetscInt *[]);
 PETSC_EXTERN PetscErrorCode DMPlexGetConeTuple(DM, IS, PetscSection *, IS *);
-PETSC_EXTERN PetscErrorCode DMPlexGetConeRecursive(DM, IS, IS *);
+PETSC_EXTERN PetscErrorCode DMPlexGetConeRecursive(DM, IS, PetscInt *, IS *[], PetscSection *[]);
+PETSC_EXTERN PetscErrorCode DMPlexRestoreConeRecursive(DM, IS, PetscInt *, IS *[], PetscSection *[]);
+PETSC_EXTERN PetscErrorCode DMPlexGetConeRecursiveVertices(DM, IS, IS *);
 PETSC_EXTERN PetscErrorCode DMPlexSetCone(DM, PetscInt, const PetscInt[]);
 PETSC_EXTERN PetscErrorCode DMPlexInsertCone(DM, PetscInt, PetscInt, PetscInt);
 PETSC_EXTERN PetscErrorCode DMPlexInsertConeOrientation(DM, PetscInt, PetscInt, PetscInt);
@@ -85,6 +88,7 @@ PETSC_EXTERN PetscErrorCode DMPlexStratify(DM);
 PETSC_EXTERN PetscErrorCode DMPlexEqual(DM,DM,PetscBool*);
 PETSC_EXTERN PetscErrorCode DMPlexReverseCell(DM, PetscInt);
 PETSC_EXTERN PetscErrorCode DMPlexOrientCell(DM,PetscInt,PetscInt,const PetscInt[]);
+PETSC_EXTERN PetscErrorCode DMPlexCompareOrientations(DM, PetscInt, PetscInt, const PetscInt [], PetscInt *, PetscBool *);
 PETSC_EXTERN PetscErrorCode DMPlexOrient(DM);
 PETSC_EXTERN PetscErrorCode DMPlexInterpolate(DM, DM *);
 PETSC_EXTERN PetscErrorCode DMPlexUninterpolate(DM, DM *);
@@ -149,7 +153,7 @@ PETSC_EXTERN PetscErrorCode DMPlexCheckFaces(DM, PetscInt);
 PETSC_EXTERN PetscErrorCode DMPlexCheckGeometry(DM);
 PETSC_EXTERN PetscErrorCode DMPlexCheckPointSF(DM);
 PETSC_EXTERN PetscErrorCode DMPlexCheckConesConformOnInterfaces(DM);
-PETSC_EXTERN PetscErrorCode DMPlexCheckCellShape(DM,PetscBool);
+PETSC_EXTERN PetscErrorCode DMPlexCheckCellShape(DM, PetscBool, PetscReal);
 
 PETSC_EXTERN PetscErrorCode DMPlexTriangleSetOptions(DM, const char *);
 PETSC_EXTERN PetscErrorCode DMPlexTetgenSetOptions(DM, const char *);
@@ -182,10 +186,11 @@ PETSC_EXTERN PetscErrorCode DMPlexSetPartitionBalance(DM, PetscBool);
 PETSC_EXTERN PetscErrorCode DMPlexGetPartitionBalance(DM, PetscBool *);
 PETSC_EXTERN PetscErrorCode DMPlexDistribute(DM, PetscInt, PetscSF*, DM*);
 PETSC_EXTERN PetscErrorCode DMPlexDistributeOverlap(DM, PetscInt, PetscSF *, DM *);
+PETSC_EXTERN PetscErrorCode DMPlexGetOverlap(DM, PetscInt *);
 PETSC_EXTERN PetscErrorCode DMPlexDistributeField(DM,PetscSF,PetscSection,Vec,PetscSection,Vec);
 PETSC_EXTERN PetscErrorCode DMPlexDistributeFieldIS(DM, PetscSF, PetscSection, IS, PetscSection, IS *);
 PETSC_EXTERN PetscErrorCode DMPlexDistributeData(DM,PetscSF,PetscSection,MPI_Datatype,void*,PetscSection,void**);
-PETSC_EXTERN PetscErrorCode DMPlexRebalanceSharedPoints(DM, PetscInt, PetscBool, PetscBool);
+PETSC_EXTERN PetscErrorCode DMPlexRebalanceSharedPoints(DM, PetscInt, PetscBool, PetscBool, PetscBool*);
 PETSC_EXTERN PetscErrorCode DMPlexMigrate(DM, PetscSF, DM);
 PETSC_EXTERN PetscErrorCode DMPlexGetGatherDM(DM, PetscSF*, DM*);
 PETSC_EXTERN PetscErrorCode DMPlexGetRedundantDM(DM, PetscSF*, DM*);
@@ -207,7 +212,7 @@ PETSC_EXTERN PetscErrorCode DMPlexPermute(DM, IS, DM *);
 PETSC_EXTERN PetscErrorCode DMPlexCreateProcessSF(DM, PetscSF, IS *, PetscSF *);
 PETSC_EXTERN PetscErrorCode DMPlexCreateTwoSidedProcessSF(DM, PetscSF, PetscSection, IS, PetscSection, IS, IS *, PetscSF *);
 PETSC_EXTERN PetscErrorCode DMPlexDistributeOwnership(DM, PetscSection, IS *, PetscSection, IS *);
-PETSC_EXTERN PetscErrorCode DMPlexCreateOverlap(DM, PetscInt, PetscSection, IS, PetscSection, IS, DMLabel *);
+PETSC_EXTERN PetscErrorCode DMPlexCreateOverlapLabel(DM, PetscInt, PetscSection, IS, PetscSection, IS, DMLabel *);
 PETSC_EXTERN PetscErrorCode DMPlexCreateOverlapMigrationSF(DM, PetscSF, PetscSF *);
 PETSC_EXTERN PetscErrorCode DMPlexStratifyMigrationSF(DM, PetscSF, PetscSF *);
 
@@ -262,6 +267,7 @@ PETSC_EXTERN PetscErrorCode PetscGridHashEnlarge(PetscGridHash, const PetscScala
 PETSC_EXTERN PetscErrorCode PetscGridHashSetGrid(PetscGridHash, const PetscInt [], const PetscReal []);
 PETSC_EXTERN PetscErrorCode PetscGridHashGetEnclosingBox(PetscGridHash, PetscInt, const PetscScalar [], PetscInt [], PetscInt []);
 PETSC_EXTERN PetscErrorCode PetscGridHashDestroy(PetscGridHash *);
+PETSC_EXTERN PetscErrorCode DMPlexFindVertices(DM, PetscInt, const PetscReal [], PetscReal, PetscInt []);
 
 /* FVM Support */
 PETSC_EXTERN PetscErrorCode DMPlexComputeCellGeometryFVM(DM, PetscInt, PetscReal *, PetscReal [], PetscReal []);
@@ -302,7 +308,7 @@ PETSC_EXTERN PetscErrorCode DMPlexRestoreClosureIndices(DM, PetscSection, PetscS
 PETSC_EXTERN PetscErrorCode DMPlexMatSetClosureRefined(DM, PetscSection, PetscSection, DM, PetscSection, PetscSection, Mat, PetscInt, const PetscScalar[], InsertMode);
 PETSC_EXTERN PetscErrorCode DMPlexMatGetClosureIndicesRefined(DM, PetscSection, PetscSection, DM, PetscSection, PetscSection, PetscInt, PetscInt[], PetscInt[]);
 PETSC_EXTERN PetscErrorCode DMPlexCreateClosureIndex(DM, PetscSection);
-PETSC_EXTERN PetscErrorCode DMPlexCreateSpectralClosurePermutation(DM, PetscInt, PetscSection);
+PETSC_EXTERN PetscErrorCode DMPlexSetClosurePermutationTensor(DM, PetscInt, PetscSection);
 
 PETSC_EXTERN PetscErrorCode DMPlexConstructGhostCells(DM, const char [], PetscInt *, DM *);
 PETSC_EXTERN PetscErrorCode DMPlexConstructCohesiveCells(DM, DMLabel, DMLabel, DM *);
@@ -312,6 +318,9 @@ PETSC_EXTERN PetscErrorCode DMPlexSetHybridBounds(DM, PetscInt, PetscInt, PetscI
 PETSC_EXTERN PetscErrorCode DMPlexGetVTKCellHeight(DM, PetscInt *);
 PETSC_EXTERN PetscErrorCode DMPlexSetVTKCellHeight(DM, PetscInt);
 PETSC_EXTERN PetscErrorCode DMPlexVTKWriteAll(PetscObject, PetscViewer);
+PETSC_EXTERN PetscErrorCode DMPlexGetGhostCellStratum(DM, PetscInt *, PetscInt *);
+PETSC_EXTERN PetscErrorCode DMPlexSetGhostCellStratum(DM, PetscInt, PetscInt);
+PETSC_EXTERN PetscErrorCode DMPlexGetInteriorCellStratum(DM, PetscInt *, PetscInt *);
 
 PETSC_EXTERN PetscErrorCode DMPlexGetCellFields(DM, IS, Vec, Vec, Vec, PetscScalar **, PetscScalar **, PetscScalar **);
 PETSC_EXTERN PetscErrorCode DMPlexRestoreCellFields(DM, IS, Vec, Vec, Vec, PetscScalar **, PetscScalar **, PetscScalar **);
@@ -325,7 +334,7 @@ PETSC_EXTERN PetscErrorCode DMPlexSetScale(DM, PetscUnit, PetscReal);
 
 typedef struct {
   DM    dm;
-  Vec   u; /* The base vector for the Jacbobian action J(u) x */
+  Vec   u; /* The base vector for the Jacobian action J(u) x */
   Mat   J; /* Preconditioner for testing */
   void *user;
 } JacActionCtx;
@@ -402,4 +411,8 @@ PETSC_EXTERN PetscErrorCode DMPlexNaturalToGlobalEnd(DM, Vec, Vec);
 
 /* mesh adaptation */
 PETSC_EXTERN PetscErrorCode DMPlexAdapt(DM, Vec, const char [], DM *);
+
+PETSC_EXTERN PetscErrorCode DMPlexGlobalToLocalBasis(DM, Vec);
+PETSC_EXTERN PetscErrorCode DMPlexLocalToGlobalBasis(DM, Vec);
+PETSC_EXTERN PetscErrorCode DMPlexCreateBasisRotation(DM, PetscReal, PetscReal, PetscReal);
 #endif

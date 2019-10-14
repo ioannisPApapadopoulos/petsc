@@ -1,6 +1,7 @@
 
 #include <petsc/private/snesimpl.h>       /*I   "petsc/private/snesimpl.h"   I*/
 #include <petscdm.h>
+#include <petscsection.h>
 #include <petscblaslapack.h>
 
 /*@C
@@ -19,8 +20,6 @@
 .  -snes_monitor_solution [ascii binary draw][:filename][:viewer format] - plots solution at each iteration
 
    Level: intermediate
-
-.keywords: SNES, nonlinear, vector, monitor, view
 
 .seealso: SNESMonitorSet(), SNESMonitorDefault(), VecView()
 @*/
@@ -56,8 +55,6 @@ PetscErrorCode  SNESMonitorSolution(SNES snes,PetscInt its,PetscReal fgnorm,Pets
 
    Level: intermediate
 
-.keywords: SNES, nonlinear, vector, monitor, view
-
 .seealso: SNESMonitorSet(), SNESMonitorDefault(), VecView()
 @*/
 PetscErrorCode  SNESMonitorResidual(SNES snes,PetscInt its,PetscReal fgnorm,PetscViewerAndFormat *vf)
@@ -92,8 +89,6 @@ PetscErrorCode  SNESMonitorResidual(SNES snes,PetscInt its,PetscReal fgnorm,Pets
 
    Level: intermediate
 
-.keywords: SNES, nonlinear, vector, monitor, view
-
 .seealso: SNESMonitorSet(), SNESMonitorDefault(), VecView()
 @*/
 PetscErrorCode  SNESMonitorSolutionUpdate(SNES snes,PetscInt its,PetscReal fgnorm,PetscViewerAndFormat *vf)
@@ -123,8 +118,6 @@ PetscErrorCode  SNESMonitorSolutionUpdate(SNES snes,PetscInt its,PetscReal fgnor
 -  dummy - unused monitor context
 
    Level: intermediate
-
-.keywords: KSP, default, monitor, residual
 
 .seealso: KSPMonitorSet(), KSPMonitorTrueResidualNorm(), KSPMonitorLGResidualNormCreate()
 @*/
@@ -183,8 +176,6 @@ PetscErrorCode  KSPMonitorSNES(KSP ksp,PetscInt n,PetscReal rnorm,void *dummy)
    Use KSPMonitorSNESLGResidualNormDestroy() to destroy this line graph; do not use PetscDrawLGDestroy().
 
    Level: intermediate
-
-.keywords: KSP, monitor, line graph, residual, create
 
 .seealso: KSPMonitorSNESLGResidualNormDestroy(), KSPMonitorSet(), KSPMonitorSNESLGTrueResidualCreate()
 @*/
@@ -254,8 +245,6 @@ PetscErrorCode  KSPMonitorSNESLGResidualNorm(KSP ksp,PetscInt n,PetscReal rnorm,
 
    Level: intermediate
 
-.keywords: KSP, monitor, line graph, destroy
-
 .seealso: KSPMonitorSNESLGResidualNormCreate(), KSPMonitorSNESLGTrueResidualDestroy(), KSPMonitorSet()
 @*/
 PetscErrorCode  KSPMonitorSNESLGResidualNormDestroy(PetscObject **objs)
@@ -284,8 +273,6 @@ PetscErrorCode  KSPMonitorSNESLGResidualNormDestroy(PetscObject **objs)
    This routine prints the residual norm at each iteration.
 
    Level: intermediate
-
-.keywords: SNES, nonlinear, default, monitor, norm
 
 .seealso: SNESMonitorSet(), SNESMonitorSolution()
 @*/
@@ -316,11 +303,9 @@ PetscErrorCode  SNESMonitorDefault(SNES snes,PetscInt its,PetscReal fgnorm,Petsc
 -  vf - viewer and format structure
 
    Notes:
-   This routine prints the largest value in each row of the Jacobian 
+   This routine prints the largest value in each row of the Jacobian
 
    Level: intermediate
-
-.keywords: SNES, nonlinear, default, monitor, norm
 
 .seealso: SNESMonitorSet(), SNESMonitorSolution()
 @*/
@@ -450,8 +435,6 @@ PetscErrorCode  SNESMonitorRange_Private(SNES snes,PetscInt it,PetscReal *per)
 
    Level: intermediate
 
-.keywords: SNES, default, monitor, residual
-
 .seealso: SNESMonitorSet(), SNESMonitorDefault(), SNESMonitorLGCreate()
 @*/
 PetscErrorCode  SNESMonitorRange(SNES snes,PetscInt it,PetscReal rnorm,PetscViewerAndFormat *vf)
@@ -493,8 +476,6 @@ PetscErrorCode  SNESMonitorRange(SNES snes,PetscInt it,PetscReal rnorm,PetscView
 
    Notes:
     Insure that SNESMonitorRatio() is called when you set this monitor
-.keywords: SNES, nonlinear, monitor, norm
-
 .seealso: SNESMonitorSet(), SNESMonitorSolution(), SNESMonitorRatio()
 @*/
 PetscErrorCode  SNESMonitorRatio(SNES snes,PetscInt its,PetscReal fgnorm,PetscViewerAndFormat *vf)
@@ -503,7 +484,7 @@ PetscErrorCode  SNESMonitorRatio(SNES snes,PetscInt its,PetscReal fgnorm,PetscVi
   PetscInt                len;
   PetscReal               *history;
   PetscViewer             viewer = vf->viewer;
-  
+
   PetscFunctionBegin;
   ierr = SNESGetConvergenceHistory(snes,&history,NULL,&len);CHKERRQ(ierr);
   ierr = PetscViewerPushFormat(viewer,vf->format);CHKERRQ(ierr);
@@ -514,7 +495,7 @@ PetscErrorCode  SNESMonitorRatio(SNES snes,PetscInt its,PetscReal fgnorm,PetscVi
     PetscReal ratio = fgnorm/history[its-1];
     ierr = PetscViewerASCIIPrintf(viewer,"%3D SNES Function norm %14.12e %14.12e \n",its,(double)fgnorm,(double)ratio);CHKERRQ(ierr);
   }
-  ierr = PetscViewerASCIISubtractTab(viewer,((PetscObject)snes)->tablevel);CHKERRQ(ierr); 
+  ierr = PetscViewerASCIISubtractTab(viewer,((PetscObject)snes)->tablevel);CHKERRQ(ierr);
   ierr = PetscViewerPopFormat(viewer);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -529,8 +510,6 @@ PetscErrorCode  SNESMonitorRatio(SNES snes,PetscInt its,PetscReal fgnorm,PetscVi
 -   viewer - the PetscViewer object (ignored)
 
    Level: intermediate
-
-.keywords: SNES, nonlinear, monitor, norm
 
 .seealso: SNESMonitorSet(), SNESMonitorSolution(), SNESMonitorDefault(), SNESMonitorRatio()
 @*/
@@ -594,7 +573,6 @@ PetscErrorCode  SNESMonitorDefaultShort(SNES snes,PetscInt its,PetscReal fgnorm,
 
   Level: intermediate
 
-.keywords: SNES, nonlinear, field, monitor, norm
 .seealso: SNESMonitorSet(), SNESMonitorSolution(), SNESMonitorDefault()
 @*/
 PetscErrorCode SNESMonitorDefaultField(SNES snes, PetscInt its, PetscReal fgnorm, PetscViewerAndFormat *vf)
@@ -615,7 +593,7 @@ PetscErrorCode SNESMonitorDefaultField(SNES snes, PetscInt its, PetscReal fgnorm
     PetscSection s, gs;
     PetscInt     Nf, f;
 
-    ierr = DMGetSection(dm, &s);CHKERRQ(ierr);
+    ierr = DMGetLocalSection(dm, &s);CHKERRQ(ierr);
     ierr = DMGetGlobalSection(dm, &gs);CHKERRQ(ierr);
     if (!s || !gs) {ierr = SNESMonitorDefault(snes, its, fgnorm, vf);CHKERRQ(ierr);}
     ierr = PetscSectionGetNumFields(s, &Nf);CHKERRQ(ierr);
@@ -669,8 +647,6 @@ $  SNES_CONVERGED_ITERATING       - (otherwise),
 
    Level: intermediate
 
-.keywords: SNES, nonlinear, default, converged, convergence
-
 .seealso: SNESSetConvergenceTest()
 @*/
 PetscErrorCode  SNESConvergedDefault(SNES snes,PetscInt it,PetscReal xnorm,PetscReal snorm,PetscReal fnorm,SNESConvergedReason *reason,void *dummy)
@@ -710,7 +686,7 @@ PetscErrorCode  SNESConvergedDefault(SNES snes,PetscInt it,PetscReal xnorm,Petsc
       ierr    = PetscInfo3(snes,"Diverged due to increase in function norm: %14.12e > %14.12e * %14.12e\n",(double)fnorm,(double)snes->divtol,(double)snes->rnorm0);CHKERRQ(ierr);
       *reason = SNES_DIVERGED_DTOL;
     }
-    
+
   }
   PetscFunctionReturn(0);
 }
@@ -737,8 +713,6 @@ PetscErrorCode  SNESConvergedDefault(SNES snes,PetscInt it,PetscReal xnorm,Petsc
 
    Level: advanced
 
-.keywords: SNES, nonlinear, skip, converged, convergence
-
 .seealso: SNESSetConvergenceTest()
 @*/
 PetscErrorCode  SNESConvergedSkip(SNES snes,PetscInt it,PetscReal xnorm,PetscReal snorm,PetscReal fnorm,SNESConvergedReason *reason,void *dummy)
@@ -764,8 +738,8 @@ PetscErrorCode  SNESConvergedSkip(SNES snes,PetscInt it,PetscReal xnorm,PetscRea
   SNESSetWorkVecs - Gets a number of work vectors.
 
   Input Parameters:
-. snes  - the SNES context
-. nw - number of work vectors to allocate
++ snes  - the SNES context
+- nw - number of work vectors to allocate
 
   Level: developer
 

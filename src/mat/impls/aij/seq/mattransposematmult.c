@@ -25,13 +25,13 @@ PetscErrorCode MatDestroy_SeqDense_MatTransMatMult(Mat A)
 PetscErrorCode MatTransposeMatMult_SeqAIJ_SeqDense(Mat A,Mat B,MatReuse scall,PetscReal fill,Mat *C)
 {
   PetscErrorCode ierr;
- 
+
   PetscFunctionBegin;
   if (scall == MAT_INITIAL_MATRIX) {
     ierr = PetscLogEventBegin(MAT_TransposeMatMultSymbolic,A,B,0,0);CHKERRQ(ierr);
     ierr = MatTransposeMatMultSymbolic_SeqAIJ_SeqDense(A,B,fill,C);CHKERRQ(ierr);
     ierr = PetscLogEventEnd(MAT_TransposeMatMultSymbolic,A,B,0,0);CHKERRQ(ierr);
-  } 
+  }
   ierr = PetscLogEventBegin(MAT_TransposeMatMultNumeric,A,B,0,0);CHKERRQ(ierr);
   ierr = MatTransposeMatMultNumeric_SeqAIJ_SeqDense(A,B,*C);CHKERRQ(ierr);
   ierr = PetscLogEventEnd(MAT_TransposeMatMultNumeric,A,B,0,0);CHKERRQ(ierr);
@@ -66,11 +66,12 @@ PetscErrorCode MatTransposeMatMultSymbolic_SeqAIJ_SeqDense(Mat A,Mat B,PetscReal
   atb->bt = bt;
   atb->ct = ct;
 
-  *C                   = Cdense;
-  c                    = (Mat_SeqDense*)Cdense->data;
-  c->atb               = atb;
-  atb->destroy         = Cdense->ops->destroy;
-  Cdense->ops->destroy = MatDestroy_SeqDense_MatTransMatMult;
+  *C                                   = Cdense;
+  c                                    = (Mat_SeqDense*)Cdense->data;
+  c->atb                               = atb;
+  atb->destroy                         = Cdense->ops->destroy;
+  Cdense->ops->destroy                 = MatDestroy_SeqDense_MatTransMatMult;
+  Cdense->ops->transposematmultnumeric = MatTransposeMatMultNumeric_SeqAIJ_SeqDense;
   PetscFunctionReturn(0);
 }
 
@@ -78,7 +79,8 @@ PetscErrorCode MatTransposeMatMultNumeric_SeqAIJ_SeqDense(Mat A,Mat B,Mat C)
 {
   PetscErrorCode      ierr;
   PetscInt            i,j,k,m=A->rmap->n,n=A->cmap->n,BN=B->cmap->N;
-  PetscScalar         *Barray,*Carray,*btarray,*ctarray;
+  const PetscScalar   *Barray,*ctarray;
+  PetscScalar         *Carray,*btarray;
   Mat_SeqDense        *c=(Mat_SeqDense*)C->data;
   Mat_MatTransMatMult *atb=c->atb;
   Vec                 bt=atb->bt,ct=atb->ct;
@@ -89,7 +91,7 @@ PetscErrorCode MatTransposeMatMultNumeric_SeqAIJ_SeqDense(Mat A,Mat B,Mat C)
   ierr = MatCreateMAIJ(A,BN,&atb->mA);CHKERRQ(ierr);
 
   /* transpose local arry of B, then copy it to vector bt */
-  ierr = MatDenseGetArray(B,&Barray);CHKERRQ(ierr);
+  ierr = MatDenseGetArrayRead(B,&Barray);CHKERRQ(ierr);
   ierr = VecGetArray(bt,&btarray);CHKERRQ(ierr);
 
   k=0;
@@ -97,19 +99,19 @@ PetscErrorCode MatTransposeMatMultNumeric_SeqAIJ_SeqDense(Mat A,Mat B,Mat C)
     for (i=0; i<m; i++) btarray[i*BN + j] = Barray[k++]; 
   }
   ierr = VecRestoreArray(bt,&btarray);CHKERRQ(ierr);
-  ierr = MatDenseRestoreArray(B,&Barray);CHKERRQ(ierr);
+  ierr = MatDenseRestoreArrayRead(B,&Barray);CHKERRQ(ierr);
   
   /* compute ct = mA^T * cb */
   ierr = MatMultTranspose(atb->mA,bt,ct);CHKERRQ(ierr);
 
   /* transpose local arry of ct to matrix C */
   ierr = MatDenseGetArray(C,&Carray);CHKERRQ(ierr);
-  ierr = VecGetArray(ct,&ctarray);CHKERRQ(ierr);
+  ierr = VecGetArrayRead(ct,&ctarray);CHKERRQ(ierr);
   k = 0;
   for (j=0; j<BN; j++) {
     for (i=0; i<n; i++) Carray[k++] = ctarray[i*BN + j];
   }
-  ierr = VecRestoreArray(ct,&ctarray);CHKERRQ(ierr);
+  ierr = VecRestoreArrayRead(ct,&ctarray);CHKERRQ(ierr);
   ierr = MatDenseRestoreArray(C,&Carray);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }

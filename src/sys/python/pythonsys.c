@@ -163,7 +163,6 @@ static PetscBool PetscBeganPython = PETSC_FALSE;
 
   Level: intermediate
 
-.keywords: Python
 @*/
 PetscErrorCode  PetscPythonFinalize(void)
 {
@@ -181,8 +180,6 @@ PetscErrorCode  PetscPythonFinalize(void)
 -  pylib - full path to the Python dynamic library, or NULL.
 
   Level: intermediate
-
-.keywords: Python
 
 @*/
 PetscErrorCode  PetscPythonInitialize(const char pyexe[],const char pylib[])
@@ -231,6 +228,14 @@ PetscErrorCode  PetscPythonInitialize(const char pyexe[],const char pylib[])
     if (sys_path) {
       ierr = PetscStrreplace(PETSC_COMM_SELF,"${PETSC_LIB_DIR}",path,sizeof(path));CHKERRQ(ierr);
       Py_DecRef(PyObject_CallMethod(sys_path,"insert","is",(int)0,(char*)path));
+#if defined(PETSC_PETSC4PY_INSTALL_PATH)
+      {
+        char *rpath;
+        ierr = PetscStrallocpy(PETSC_PETSC4PY_INSTALL_PATH,&rpath);CHKERRQ(ierr);
+        Py_DecRef(PyObject_CallMethod(sys_path,"insert","is",(int)0,rpath));
+        ierr = PetscFree(rpath);CHKERRQ(ierr);
+      }
+#endif
     }
     /* register finalizer */
     if (!registered) {
@@ -256,8 +261,6 @@ PetscErrorCode  PetscPythonInitialize(const char pyexe[],const char pylib[])
   PetscPythonPrintError - Print Python errors.
 
   Level: developer
-
-.keywords: Python
 
 @*/
 PetscErrorCode  PetscPythonPrintError(void)
@@ -285,8 +288,6 @@ PetscErrorCode (*PetscPythonMonitorSet_C)(PetscObject,const char[]) = NULL;
   PetscPythonMonitorSet - Set Python monitor
 
   Level: developer
-
-.keywords: Python
 
 @*/
 PetscErrorCode PetscPythonMonitorSet(PetscObject obj, const char url[])

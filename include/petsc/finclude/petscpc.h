@@ -2,8 +2,8 @@
 !
 !  Include file for Fortran use of the PC (preconditioner) package in PETSc
 !
-#if !defined (__PETSCPCDEF_H)
-#define __PETSCPCDEF_H
+#if !defined (PETSCPCDEF_H)
+#define PETSCPCDEF_H
 
 #include "petsc/finclude/petscmat.h"
 #include "petsc/finclude/petscdm.h"
@@ -23,11 +23,20 @@
 #define PCFieldSplitSchurFactType PetscEnum
 #define CoarseProblemType PetscEnum
 #define PCGAMGType character*(80)
+#define PCGAMGClassicalType character*(80)
+#define PCGAMGLayoutType PetscEnum
 !
 ! GAMG types
 !
 #define PCGAMGAGG 'agg'
 #define PCGAMGGEO  'geo'
+#define PCGAMGCLASSICAL 'classical'
+!
+! GAMG classical types
+!
+#define PCGAMGCLASSICALDIRECT   'direct'
+#define PCGAMGCLASSICALSTANDARD 'standard'
+
 !
 !  Various preconditioners
 !
@@ -71,10 +80,13 @@
 #define PCGAMG 'gamg'
 #define PCBDDC 'bddc'
 #define PCPATCH 'patch'
+#define PCDEFLATION 'deflation'
 
 #define PCMGType PetscEnum
 #define PCMGCycleType PetscEnum
 #define PCMGGalerkinType PetscEnum
 #define PCExoticType PetscEnum
+#define PCDeflationSpaceType PetscEnum
+#define PCBDDCInterfaceExtType PetscEnum
 #define PCFailedReason PetscEnum
 #endif

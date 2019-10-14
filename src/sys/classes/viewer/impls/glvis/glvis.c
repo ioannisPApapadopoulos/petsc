@@ -459,6 +459,7 @@ PetscErrorCode PetscViewerGLVisRestoreWindow_Private(PetscViewer viewer,PetscInt
   PetscErrorCode   ierr;
 
   PetscFunctionBegin;
+  PetscValidHeaderSpecificType(viewer,PETSC_VIEWER_CLASSID,1,PETSCVIEWERGLVIS);
   PetscValidLogicalCollectiveInt(viewer,wid,2);
   PetscValidPointer(view,3);
   if (wid < 0 || wid > socket->nwindow-1) SETERRQ2(PetscObjectComm((PetscObject)viewer),PETSC_ERR_USER,"Cannot restore window id %D: allowed range [0,%D)",wid,socket->nwindow);
@@ -628,7 +629,7 @@ static PetscErrorCode PetscViewerSetFileName_GLVis(PetscViewer viewer, const cha
 /*@C
   PetscViewerGLVisOpen - Opens a GLVis type viewer
 
-  Collective on MPI_Comm
+  Collective
 
   Input Parameters:
 +  comm      - the MPI communicator
@@ -678,7 +679,7 @@ PetscErrorCode PetscViewerGLVisOpen(MPI_Comm comm, PetscViewerGLVisType type, co
 /*
   PETSC_VIEWER_GLVIS_ - Creates an GLVIS PetscViewer shared by all processors in a communicator.
 
-  Collective on MPI_Comm
+  Collective
 
   Input Parameter:
 . comm - the MPI communicator to share the GLVIS PetscViewer
@@ -798,7 +799,7 @@ static PetscErrorCode PetscViewerASCIISocketOpen(MPI_Comm comm,const char* hostn
   SETERRQ(comm,PETSC_ERR_SUP,"Not implemented for Windows");
 #else
   FILE           *stream = NULL;
-  int            fd;
+  int            fd=0;
   PetscErrorCode ierr;
 
   PetscFunctionBegin;

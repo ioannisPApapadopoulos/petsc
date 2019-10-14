@@ -112,7 +112,7 @@ static PetscErrorCode DMFieldEvaluateFE_DS(DMField field, IS pointIS, PetscQuadr
   ierr = PetscQuadratureGetData(quad,&dim,NULL,&nq,&qpoints,NULL);CHKERRQ(ierr);
   ierr = DMFieldDSGetHeightDisc(field,dsfield->height - 1 - dim,&disc);CHKERRQ(ierr);
   ierr = DMGetDimension(dm,&meshDim);CHKERRQ(ierr);
-  ierr = DMGetDefaultSection(dm,&section);CHKERRQ(ierr);
+  ierr = DMGetLocalSection(dm,&section);CHKERRQ(ierr);
   ierr = PetscSectionGetField(section,dsfield->fieldNum,&section);CHKERRQ(ierr);
   ierr = PetscObjectGetClassId(disc,&classid);CHKERRQ(ierr);
   /* TODO: batch */
@@ -203,7 +203,7 @@ static PetscErrorCode DMFieldEvaluate_DS(DMField field, Vec points, PetscDataTyp
 
   PetscFunctionBegin;
   nc   = field->numComponents;
-  ierr = DMGetDefaultSection(field->dm,&section);CHKERRQ(ierr);
+  ierr = DMGetLocalSection(field->dm,&section);CHKERRQ(ierr);
   ierr = DMFieldDSGetHeightDisc(field,0,&cellDisc);CHKERRQ(ierr);
   ierr = PetscObjectGetClassId(cellDisc, &discID);CHKERRQ(ierr);
   if (discID != PETSCFE_CLASSID) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_PLIB, "Discretization type not supported\n");
@@ -774,8 +774,10 @@ static PetscErrorCode DMFieldComputeFaceData_DS(DMField field, IS pointIS, Petsc
       ierr = DMPlexGetSupport(dm, point, &supp);CHKERRQ(ierr);
       for (s = 0; s < numSupp; s++, offset++) {
         for (q = 0; q < Nq * dE * dE; q++) {
+          geom->suppJ[s][p * Nq * dE * dE + q]    = cellGeom->J[offset * Nq * dE * dE + q];
           geom->suppInvJ[s][p * Nq * dE * dE + q] = cellGeom->invJ[offset * Nq * dE * dE + q];
         }
+        for (q = 0; q < Nq; q++) geom->suppDetJ[s][p * Nq + q] = cellGeom->detJ[offset * Nq + q];
       }
     }
     ierr = PetscFEGeomDestroy(&cellGeom);CHKERRQ(ierr);
@@ -986,8 +988,10 @@ static PetscErrorCode DMFieldComputeFaceData_DS(DMField field, IS pointIS, Petsc
           for (s = 0; s < 2; s++) {
             if (co[p][s][0] == f && co[p][s][1] == o + minOrient) {
               for (q = 0; q < Nq * dE * dE; q++) {
+                geom->suppJ[s][p * Nq * dE * dE + q]    = cellGeom->J[offset * Nq * dE * dE + q];
                 geom->suppInvJ[s][p * Nq * dE * dE + q] = cellGeom->invJ[offset * Nq * dE * dE + q];
               }
+              for (q = 0; q < Nq; q++) geom->suppDetJ[s][p * Nq + q] = cellGeom->detJ[offset * Nq + q];
               offset++;
             }
           }
@@ -1004,6 +1008,7 @@ static PetscErrorCode DMFieldComputeFaceData_DS(DMField field, IS pointIS, Petsc
     }
     ierr = PetscFree2(orients,orientPoints);CHKERRQ(ierr);
     ierr = PetscQuadratureDestroy(&cellQuad);CHKERRQ(ierr);
+    for (f = 0; f < coneSize; f++) {ierr = PetscFree(counts[f]);CHKERRQ(ierr);}
     ierr = PetscFree2(co,counts);CHKERRQ(ierr);
   }
   ierr = ISRestoreIndices(pointIS, &points);CHKERRQ(ierr);
@@ -1049,7 +1054,7 @@ PetscErrorCode DMFieldCreateDS(DM dm, PetscInt fieldNum, Vec vec,DMField *field)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  ierr = DMGetDefaultSection(dm,&section);CHKERRQ(ierr);
+  ierr = DMGetLocalSection(dm,&section);CHKERRQ(ierr);
   ierr = PetscSectionGetFieldComponents(section,fieldNum,&numComponents);CHKERRQ(ierr);
   ierr = DMGetNumFields(dm,&dsNumFields);CHKERRQ(ierr);
   if (dsNumFields) {ierr = DMGetField(dm,fieldNum,NULL,&disc);CHKERRQ(ierr);}

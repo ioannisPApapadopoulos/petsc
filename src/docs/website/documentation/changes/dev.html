@@ -34,6 +34,7 @@
               <a href="index.html">Changes</a>
               <ul>
                 <li><span class="current">dev</span></li>
+                <li><a href="312.html">3.12</a></li>
                 <li><a href="311.html">3.11</a></li>
                 <li><a href="310.html">3.10</a></li>
                 <li><a href="39.html">3.9</a></li>
@@ -102,9 +103,6 @@
       </div>
 
       <h4>General:</h4>
-        <ul>
-          <li>Added --with-64-bit-blas-indices that will switch to 64 bit indices when using MKL libraries for BLAS/LAPACK</li>
-        </ul>
       <h4>Configure/Build:</h4>
       <h4>IS:</h4>
       <h4>PetscDraw:</h4>
@@ -119,7 +117,14 @@
       <h4>SNESLineSearch:</h4>
       <h4>TS:</h4>
       <h4>DM/DA:</h4>
+        <ul>
+          <li>DMCopyLabels(): add two additional input flags.</li>
+        </ul>
       <h4>DMPlex:</h4>
+        <ul>
+          <li>Add DMPlexOrientCell() which orients a single cell</li>
+          <li>Add DMPlexCompareOrientations() which compares the cone point order of a single cell with the given reference cone</li>
+        </ul>
       <h4>PetscViewer:</h4>
       <h4>SYS:</h4>
       <h4>AO:</h4>

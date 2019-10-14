@@ -4,8 +4,8 @@
   on a grid. They have more mathematical structure then simple arrays.
 */
 
-#ifndef __PETSCVEC_H
-#define __PETSCVEC_H
+#ifndef PETSCVEC_H
+#define PETSCVEC_H
 #include <petscis.h>
 #include <petscviewer.h>
 
@@ -13,8 +13,6 @@
      Vec - Abstract PETSc vector object
 
    Level: beginner
-
-  Concepts: field variables, unknowns, arrays
 
 .seealso:  VecCreate(), VecType, VecSetType()
 S*/
@@ -25,8 +23,6 @@ typedef struct _p_Vec*         Vec;
        between vectors in parallel. Manages both scatters and gathers
 
    Level: beginner
-
-  Concepts: scatter
 
 .seealso:  VecScatterCreate(), VecScatterBegin(), VecScatterEnd()
 S*/
@@ -361,6 +357,16 @@ PETSC_EXTERN PetscErrorCode VecRestoreArray2d(Vec,PetscInt,PetscInt,PetscInt,Pet
 PETSC_EXTERN PetscErrorCode VecGetArray1d(Vec,PetscInt,PetscInt,PetscScalar *[]);
 PETSC_EXTERN PetscErrorCode VecRestoreArray1d(Vec,PetscInt,PetscInt,PetscScalar *[]);
 
+PETSC_EXTERN PetscErrorCode VecGetArray4dWrite(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar****[]);
+PETSC_EXTERN PetscErrorCode VecGetArray4dWrite(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar****[]);
+PETSC_EXTERN PetscErrorCode VecRestoreArray4dWrite(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar****[]);
+PETSC_EXTERN PetscErrorCode VecGetArray3dWrite(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar***[]);
+PETSC_EXTERN PetscErrorCode VecRestoreArray3dWrite(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar***[]);
+PETSC_EXTERN PetscErrorCode VecGetArray2dWrite(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar**[]);
+PETSC_EXTERN PetscErrorCode VecRestoreArray2dWrite(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar**[]);
+PETSC_EXTERN PetscErrorCode VecGetArray1dWrite(Vec,PetscInt,PetscInt,PetscScalar *[]);
+PETSC_EXTERN PetscErrorCode VecRestoreArray1dWrite(Vec,PetscInt,PetscInt,PetscScalar *[]);
+
 PETSC_EXTERN PetscErrorCode VecGetArray4dRead(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar****[]);
 PETSC_EXTERN PetscErrorCode VecRestoreArray4dRead(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar****[]);
 PETSC_EXTERN PetscErrorCode VecGetArray3dRead(Vec,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscInt,PetscScalar***[]);
@@ -373,6 +379,7 @@ PETSC_EXTERN PetscErrorCode VecRestoreArray1dRead(Vec,PetscInt,PetscInt,PetscSca
 PETSC_EXTERN PetscErrorCode VecPlaceArray(Vec,const PetscScalar[]);
 PETSC_EXTERN PetscErrorCode VecResetArray(Vec);
 PETSC_EXTERN PetscErrorCode VecReplaceArray(Vec,const PetscScalar[]);
+
 PETSC_EXTERN PetscErrorCode VecGetArrays(const Vec[],PetscInt,PetscScalar**[]);
 PETSC_EXTERN PetscErrorCode VecRestoreArrays(const Vec[],PetscInt,PetscScalar**[]);
 
@@ -387,6 +394,19 @@ PETSC_EXTERN PetscErrorCode VecGetOwnershipRanges(Vec,const PetscInt *[]);
 
 PETSC_EXTERN PetscErrorCode VecSetLocalToGlobalMapping(Vec,ISLocalToGlobalMapping);
 PETSC_EXTERN PetscErrorCode VecSetValuesLocal(Vec,PetscInt,const PetscInt[],const PetscScalar[],InsertMode);
+
+PETSC_EXTERN PetscErrorCode VecCUDAGetArray(Vec v, PetscScalar **a);
+PETSC_EXTERN PetscErrorCode VecCUDARestoreArray(Vec v, PetscScalar **a);
+
+PETSC_EXTERN PetscErrorCode VecCUDAGetArrayRead(Vec v, const PetscScalar **a);
+PETSC_EXTERN PetscErrorCode VecCUDARestoreArrayRead(Vec v, const PetscScalar **a);
+
+PETSC_EXTERN PetscErrorCode VecCUDAGetArrayWrite(Vec v, PetscScalar **a);
+PETSC_EXTERN PetscErrorCode VecCUDARestoreArrayWrite(Vec v, PetscScalar **a);
+
+PETSC_EXTERN PetscErrorCode VecCUDAPlaceArray(Vec, PetscScalar *);
+PETSC_EXTERN PetscErrorCode VecCUDAReplaceArray(Vec, PetscScalar *);
+PETSC_EXTERN PetscErrorCode VecCUDAResetArray(Vec);
 
 /*MC
    VecSetValueLocal - Set a single entry into a vector using the local numbering
@@ -434,23 +454,31 @@ PETSC_EXTERN PetscErrorCode VecMTDotBegin(Vec,PetscInt,const Vec[],PetscScalar[]
 PETSC_EXTERN PetscErrorCode VecMTDotEnd(Vec,PetscInt,const Vec[],PetscScalar[]);
 PETSC_EXTERN PetscErrorCode PetscCommSplitReductionBegin(MPI_Comm);
 
+PETSC_EXTERN PetscErrorCode VecPinToCPU(Vec,PetscBool);
 
 typedef enum {VEC_IGNORE_OFF_PROC_ENTRIES,VEC_IGNORE_NEGATIVE_INDICES,VEC_SUBSET_OFF_PROC_ENTRIES} VecOption;
 PETSC_EXTERN PetscErrorCode VecSetOption(Vec,VecOption,PetscBool );
 
 PETSC_EXTERN PetscErrorCode VecGetArray(Vec,PetscScalar**);
+PETSC_EXTERN PetscErrorCode VecGetArrayWrite(Vec,PetscScalar**);
 PETSC_EXTERN PetscErrorCode VecGetArrayRead(Vec,const PetscScalar**);
 PETSC_EXTERN PetscErrorCode VecRestoreArray(Vec,PetscScalar**);
+PETSC_EXTERN PetscErrorCode VecRestoreArrayWrite(Vec,PetscScalar**);
 PETSC_EXTERN PetscErrorCode VecRestoreArrayRead(Vec,const PetscScalar**);
 PETSC_EXTERN PetscErrorCode VecGetLocalVector(Vec,Vec);
 PETSC_EXTERN PetscErrorCode VecRestoreLocalVector(Vec,Vec);
 PETSC_EXTERN PetscErrorCode VecGetLocalVectorRead(Vec,Vec);
 PETSC_EXTERN PetscErrorCode VecRestoreLocalVectorRead(Vec,Vec);
 
+PETSC_EXTERN PetscErrorCode VecGetArrayInPlace(Vec,PetscScalar**);
+PETSC_EXTERN PetscErrorCode VecRestoreArrayInPlace(Vec,PetscScalar**);
+PETSC_EXTERN PetscErrorCode VecGetArrayReadInPlace(Vec,const PetscScalar**);
+PETSC_EXTERN PetscErrorCode VecRestoreArrayReadInPlace(Vec,const PetscScalar**);
+
 /*@C
    VecGetArrayPair - Accesses a pair of pointers for two vectors that may be common. When not common the first is read only
 
-   Logically Collective on Vec
+   Logically Collective on x
 
    Input Parameters:
 +  x - the vector
@@ -484,7 +512,7 @@ PETSC_STATIC_INLINE PetscErrorCode VecGetArrayPair(Vec x,Vec y,PetscScalar **xv,
 /*@C
    VecRestoreArrayPair - Returns a pair of pointers for two vectors that may be common. When not common the first is read only
 
-   Logically Collective on Vec
+   Logically Collective on x
 
    Input Parameters:
 +  x - the vector
@@ -529,9 +557,9 @@ PETSC_STATIC_INLINE PetscErrorCode VecSetErrorIfLocked(Vec x,PetscInt arg)
   PetscFunctionReturn(0);
 }
 /* The three are deprecated */
-PETSC_DEPRECATED("Use VecLockReadPush (since v3.11)") PetscErrorCode VecLockPush(Vec);
-PETSC_DEPRECATED("Use VecLockReadPop (since v3.11)")  PetscErrorCode VecLockPop(Vec);
-#define VecLocked(x,arg) VecSetErrorIfLocked(x,arg)
+PETSC_EXTERN PETSC_DEPRECATED_FUNCTION("Use VecLockReadPush() (since version 3.11)") PetscErrorCode VecLockPush(Vec);
+PETSC_EXTERN PETSC_DEPRECATED_FUNCTION("Use VecLockReadPop() (since version 3.11)")  PetscErrorCode VecLockPop(Vec);
+#define VecLocked(x,arg) VecSetErrorIfLocked(x,arg) PETSC_DEPRECATED_MACRO("GCC warning \"Use VecSetErrorIfLocked() (since version 3.11)\"")
 #else
 #define VecLockReadPush(x)           0
 #define VecLockReadPop(x)            0
@@ -606,8 +634,6 @@ PETSC_EXTERN PetscErrorCode PetscViewerMathematicaPutVector(PetscViewer, Vec);
     This is faked by storing a single vector that has enough array space for
     n vectors
 
-  Concepts: parallel decomposition
-
 S*/
         struct _n_Vecs  {PetscInt n; Vec v;};
 typedef struct _n_Vecs* Vecs;
@@ -656,8 +682,6 @@ PETSC_EXTERN PetscErrorCode PetscSectionVecView(PetscSection, Vec, PetscViewer);
 PETSC_EXTERN PetscErrorCode VecGetValuesSection(Vec, PetscSection, PetscInt, PetscScalar **);
 PETSC_EXTERN PetscErrorCode VecSetValuesSection(Vec, PetscSection, PetscInt, PetscScalar [], InsertMode);
 PETSC_EXTERN PetscErrorCode PetscSectionVecNorm(PetscSection, PetscSection, Vec, NormType, PetscReal []);
-
-PETSC_EXTERN PetscErrorCode PetscSFCreateFromZero(MPI_Comm,Vec,PetscSF*);
 
 /*S
   VecTagger - Object used to manage the tagging of a subset of indices based on the values of a vector.  The

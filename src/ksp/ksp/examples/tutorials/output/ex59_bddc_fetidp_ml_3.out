@@ -22,6 +22,7 @@ PC Object: (physical_) 4 MPI processes
     Eliminate dirichlet boundary dofs: 0
     Switch on static condensation ops around the interface preconditioner: 0
     Use exact dirichlet trick: 1
+    Interface extension: DIRICHLET
     Multilevel max levels: 1
     Multilevel coarsening ratio: 4
     Use estimated eigs for coarse problem: 0
@@ -157,7 +158,7 @@ PC Object: (physical_) 4 MPI processes
   Mat Object: 4 MPI processes
     type: is
     rows=342, cols=342
-    total: nonzeros=1724, allocated nonzeros=54720
+    total: nonzeros=1724, allocated nonzeros=36200
     total number of mallocs used during MatSetValues calls =0
       has attached near null space
 ---------------------BDDC stats-------------------------------

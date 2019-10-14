@@ -3,6 +3,8 @@
   matrix storage format using the CUSPARSE library,
 */
 #define PETSC_SKIP_SPINLOCK
+#define PETSC_SKIP_CXX_COMPLEX_FIX
+#define PETSC_SKIP_IMMINTRIN_H_CUDAWORKAROUND 1
 
 #include <petscconf.h>
 #include <../src/mat/impls/aij/seq/aij.h>          /*I "petscmat.h" I*/
@@ -124,7 +126,6 @@ PETSC_INTERN PetscErrorCode MatCUSPARSESetFormat_SeqAIJCUSPARSE(Mat A,MatCUSPARS
   Mat_SeqAIJCUSPARSE *cusparsestruct = (Mat_SeqAIJCUSPARSE*)A->spptr;
 
   PetscFunctionBegin;
-#if CUDA_VERSION>=4020
   switch (op) {
   case MAT_CUSPARSE_MULT:
     cusparsestruct->format = format;
@@ -135,9 +136,6 @@ PETSC_INTERN PetscErrorCode MatCUSPARSESetFormat_SeqAIJCUSPARSE(Mat A,MatCUSPARS
   default:
     SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_SUP,"unsupported operation %d for MatCUSPARSEFormatOperation. MAT_CUSPARSE_MULT and MAT_CUSPARSE_ALL are currently supported.",op);
   }
-#else
-  if (format==MAT_CUSPARSE_ELL || format==MAT_CUSPARSE_HYB) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"ELL (Ellpack) and HYB (Hybrid) storage format require CUDA 4.2 or later.");
-#endif
   PetscFunctionReturn(0);
 }
 
@@ -249,7 +247,8 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildILULowerTriMatrix(Mat A)
   PetscErrorCode                    ierr;
 
   PetscFunctionBegin;
-  if (A->valid_GPU_matrix == PETSC_OFFLOAD_UNALLOCATED || A->valid_GPU_matrix == PETSC_OFFLOAD_CPU) {
+  if (!n) PetscFunctionReturn(0);
+  if (A->offloadmask == PETSC_OFFLOAD_UNALLOCATED || A->offloadmask == PETSC_OFFLOAD_CPU) {
     try {
       /* first figure out the number of nonzeros in the lower triangular matrix including 1's on the diagonal. */
       nzLower=n+ai[n]-ai[1];
@@ -274,8 +273,8 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildILULowerTriMatrix(Mat A)
         AiLo[i]    = rowOffset;
         rowOffset += nz+1;
 
-        ierr = PetscMemcpy(&(AjLo[offset]), vi, nz*sizeof(PetscInt));CHKERRQ(ierr);
-        ierr = PetscMemcpy(&(AALo[offset]), v, nz*sizeof(PetscScalar));CHKERRQ(ierr);
+        ierr = PetscArraycpy(&(AjLo[offset]), vi, nz);CHKERRQ(ierr);
+        ierr = PetscArraycpy(&(AALo[offset]), v, nz);CHKERRQ(ierr);
 
         offset      += nz;
         AjLo[offset] = (PetscInt) i;
@@ -329,6 +328,7 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildILULowerTriMatrix(Mat A)
       ierr = cudaFreeHost(AiLo);CHKERRCUDA(ierr);
       ierr = cudaFreeHost(AjLo);CHKERRCUDA(ierr);
       ierr = cudaFreeHost(AALo);CHKERRCUDA(ierr);
+      ierr = PetscLogCpuToGpu((n+1+nzLower)*sizeof(int)+nzLower*sizeof(PetscScalar));CHKERRQ(ierr);
     } catch(char *ex) {
       SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"CUSPARSE error: %s", ex);
     }
@@ -351,7 +351,8 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildILUUpperTriMatrix(Mat A)
   PetscErrorCode                    ierr;
 
   PetscFunctionBegin;
-  if (A->valid_GPU_matrix == PETSC_OFFLOAD_UNALLOCATED || A->valid_GPU_matrix == PETSC_OFFLOAD_CPU) {
+  if (!n) PetscFunctionReturn(0);
+  if (A->offloadmask == PETSC_OFFLOAD_UNALLOCATED || A->offloadmask == PETSC_OFFLOAD_CPU) {
     try {
       /* next, figure out the number of nonzeros in the upper triangular matrix. */
       nzUpper = adiag[0]-adiag[n];
@@ -380,8 +381,8 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildILUUpperTriMatrix(Mat A)
         AAUp[offset] = (MatScalar)1./v[nz];
         AiUp[i]      = AiUp[i+1] - (nz+1);
 
-        ierr = PetscMemcpy(&(AjUp[offset+1]), vi, nz*sizeof(PetscInt));CHKERRQ(ierr);
-        ierr = PetscMemcpy(&(AAUp[offset+1]), v, nz*sizeof(PetscScalar));CHKERRQ(ierr);
+        ierr = PetscArraycpy(&(AjUp[offset+1]), vi, nz);CHKERRQ(ierr);
+        ierr = PetscArraycpy(&(AAUp[offset+1]), v, nz);CHKERRQ(ierr);
       }
 
       /* allocate space for the triangular factor information */
@@ -427,6 +428,7 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildILUUpperTriMatrix(Mat A)
       ierr = cudaFreeHost(AiUp);CHKERRCUDA(ierr);
       ierr = cudaFreeHost(AjUp);CHKERRCUDA(ierr);
       ierr = cudaFreeHost(AAUp);CHKERRCUDA(ierr);
+      ierr = PetscLogCpuToGpu((n+1+nzUpper)*sizeof(int)+nzUpper*sizeof(PetscScalar));CHKERRQ(ierr);
     } catch(char *ex) {
       SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"CUSPARSE error: %s", ex);
     }
@@ -451,8 +453,8 @@ static PetscErrorCode MatSeqAIJCUSPARSEILUAnalysisAndCopyToGPU(Mat A)
   cusparseTriFactors->workVector = new THRUSTARRAY(n);
   cusparseTriFactors->nnz=a->nz;
 
-  A->valid_GPU_matrix = PETSC_OFFLOAD_BOTH;
-  /*lower triangular indices */
+  A->offloadmask = PETSC_OFFLOAD_BOTH;
+  /* lower triangular indices */
   ierr = ISGetIndices(isrow,&r);CHKERRQ(ierr);
   ierr = ISIdentity(isrow,&row_identity);CHKERRQ(ierr);
   if (!row_identity) {
@@ -461,13 +463,22 @@ static PetscErrorCode MatSeqAIJCUSPARSEILUAnalysisAndCopyToGPU(Mat A)
   }
   ierr = ISRestoreIndices(isrow,&r);CHKERRQ(ierr);
 
-  /*upper triangular indices */
+  /* upper triangular indices */
   ierr = ISGetIndices(iscol,&c);CHKERRQ(ierr);
   ierr = ISIdentity(iscol,&col_identity);CHKERRQ(ierr);
   if (!col_identity) {
     cusparseTriFactors->cpermIndices = new THRUSTINTARRAY(n);
     cusparseTriFactors->cpermIndices->assign(c, c+n);
   }
+
+  if (!row_identity && !col_identity) {
+    ierr = PetscLogCpuToGpu(2*n*sizeof(PetscInt));CHKERRQ(ierr);
+  } else if(!row_identity) {
+    ierr = PetscLogCpuToGpu(n*sizeof(PetscInt));CHKERRQ(ierr);
+  } else if(!col_identity) {
+    ierr = PetscLogCpuToGpu(n*sizeof(PetscInt));CHKERRQ(ierr);
+  }
+
   ierr = ISRestoreIndices(iscol,&c);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
@@ -489,7 +500,8 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildICCTriMatrices(Mat A)
   const MatScalar                   *aa = b->a,*v;
 
   PetscFunctionBegin;
-  if (A->valid_GPU_matrix == PETSC_OFFLOAD_UNALLOCATED || A->valid_GPU_matrix == PETSC_OFFLOAD_CPU) {
+  if (!n) PetscFunctionReturn(0);
+  if (A->offloadmask == PETSC_OFFLOAD_UNALLOCATED || A->offloadmask == PETSC_OFFLOAD_CPU) {
     try {
       /* Allocate Space for the upper triangular matrix */
       ierr = cudaMallocHost((void**) &AiUp, (n+1)*sizeof(PetscInt));CHKERRCUDA(ierr);
@@ -515,8 +527,8 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildICCTriMatrices(Mat A)
 
         offset+=1;
         if (nz>0) {
-          ierr = PetscMemcpy(&(AjUp[offset]), vj, nz*sizeof(PetscInt));CHKERRQ(ierr);
-          ierr = PetscMemcpy(&(AAUp[offset]), v, nz*sizeof(PetscScalar));CHKERRQ(ierr);
+          ierr = PetscArraycpy(&(AjUp[offset]), vj, nz);CHKERRQ(ierr);
+          ierr = PetscArraycpy(&(AAUp[offset]), v, nz);CHKERRQ(ierr);
           for (j=offset; j<offset+nz; j++) {
             AAUp[j] = -AAUp[j];
             AALo[j] = AAUp[j]/v[nz];
@@ -595,6 +607,7 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildICCTriMatrices(Mat A)
 
       loTriFactor->csrMat->values = new THRUSTARRAY(a->nz);
       loTriFactor->csrMat->values->assign(AALo, AALo+a->nz);
+      ierr = PetscLogCpuToGpu(2*(((A->rmap->n+1)+(a->nz))*sizeof(int)+(a->nz)*sizeof(PetscScalar)));CHKERRQ(ierr);
 
       /* perform the solve analysis */
       stat = cusparse_analysis(cusparseTriFactors->handle, loTriFactor->solveOp,
@@ -605,7 +618,7 @@ static PetscErrorCode MatSeqAIJCUSPARSEBuildICCTriMatrices(Mat A)
       /* assign the pointer. Is this really necessary? */
       ((Mat_SeqAIJCUSPARSETriFactors*)A->spptr)->loTriFactorPtr = loTriFactor;
 
-      A->valid_GPU_matrix = PETSC_OFFLOAD_BOTH;
+      A->offloadmask = PETSC_OFFLOAD_BOTH;
       ierr = cudaFreeHost(AiUp);CHKERRCUDA(ierr);
       ierr = cudaFreeHost(AjUp);CHKERRCUDA(ierr);
       ierr = cudaFreeHost(AAUp);CHKERRCUDA(ierr);
@@ -632,14 +645,22 @@ static PetscErrorCode MatSeqAIJCUSPARSEICCAnalysisAndCopyToGPU(Mat A)
   cusparseTriFactors->workVector = new THRUSTARRAY(n);
   cusparseTriFactors->nnz=(a->nz-n)*2 + n;
 
-  /*lower triangular indices */
+  /* lower triangular indices */
   ierr = ISGetIndices(ip,&rip);CHKERRQ(ierr);
   ierr = ISIdentity(ip,&perm_identity);CHKERRQ(ierr);
   if (!perm_identity) {
+    IS             iip;
+    const PetscInt *irip;
+
+    ierr = ISInvertPermutation(ip,PETSC_DECIDE,&iip);CHKERRQ(ierr);
+    ierr = ISGetIndices(iip,&irip);CHKERRQ(ierr);
     cusparseTriFactors->rpermIndices = new THRUSTINTARRAY(n);
     cusparseTriFactors->rpermIndices->assign(rip, rip+n);
     cusparseTriFactors->cpermIndices = new THRUSTINTARRAY(n);
-    cusparseTriFactors->cpermIndices->assign(rip, rip+n);
+    cusparseTriFactors->cpermIndices->assign(irip, irip+n);
+    ierr = ISRestoreIndices(iip,&irip);CHKERRQ(ierr);
+    ierr = ISDestroy(&iip);CHKERRQ(ierr);
+    ierr = PetscLogCpuToGpu(2*n*sizeof(PetscInt));CHKERRQ(ierr);
   }
   ierr = ISRestoreIndices(ip,&rip);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -660,9 +681,13 @@ static PetscErrorCode MatLUFactorNumeric_SeqAIJCUSPARSE(Mat B,Mat A,const MatFac
   if (row_identity && col_identity) {
     B->ops->solve = MatSolve_SeqAIJCUSPARSE_NaturalOrdering;
     B->ops->solvetranspose = MatSolveTranspose_SeqAIJCUSPARSE_NaturalOrdering;
+    B->ops->matsolve = NULL;
+    B->ops->matsolvetranspose = NULL;
   } else {
     B->ops->solve = MatSolve_SeqAIJCUSPARSE;
     B->ops->solvetranspose = MatSolveTranspose_SeqAIJCUSPARSE;
+    B->ops->matsolve = NULL;
+    B->ops->matsolvetranspose = NULL;
   }
 
   /* get the triangular factors */
@@ -685,9 +710,13 @@ static PetscErrorCode MatCholeskyFactorNumeric_SeqAIJCUSPARSE(Mat B,Mat A,const 
   if (perm_identity) {
     B->ops->solve = MatSolve_SeqAIJCUSPARSE_NaturalOrdering;
     B->ops->solvetranspose = MatSolveTranspose_SeqAIJCUSPARSE_NaturalOrdering;
+    B->ops->matsolve = NULL;
+    B->ops->matsolvetranspose = NULL;
   } else {
     B->ops->solve = MatSolve_SeqAIJCUSPARSE;
     B->ops->solvetranspose = MatSolveTranspose_SeqAIJCUSPARSE;
+    B->ops->matsolve = NULL;
+    B->ops->matsolvetranspose = NULL;
   }
 
   /* get the triangular factors */
@@ -835,6 +864,7 @@ static PetscErrorCode MatSeqAIJCUSPARSEGenerateTransposeForMult(Mat A)
   cusparseStatus_t             stat;
   cusparseIndexBase_t          indexBase;
   cudaError_t                  err;
+  PetscErrorCode               ierr;
 
   PetscFunctionBegin;
 
@@ -857,19 +887,37 @@ static PetscErrorCode MatSeqAIJCUSPARSEGenerateTransposeForMult(Mat A)
   if (cusparsestruct->format==MAT_CUSPARSE_CSR) {
     CsrMatrix *matrix = (CsrMatrix*)matstruct->mat;
     CsrMatrix *matrixT= new CsrMatrix;
+    thrust::device_vector<int> *rowoffsets_gpu;
+    const int ncomprow = matstruct->cprowIndices->size();
+    thrust::host_vector<int> cprow(ncomprow);
+    cprow = *matstruct->cprowIndices; // GPU --> CPU
     matrixT->num_rows = A->cmap->n;
     matrixT->num_cols = A->rmap->n;
     matrixT->num_entries = a->nz;
-    matrixT->row_offsets = new THRUSTINTARRAY32(A->rmap->n+1);
+    matrixT->row_offsets = new THRUSTINTARRAY32(matrixT->num_rows+1);
     matrixT->column_indices = new THRUSTINTARRAY32(a->nz);
     matrixT->values = new THRUSTARRAY(a->nz);
+    PetscInt k,i;
+    thrust::host_vector<int> rowst_host(A->rmap->n+1);
+
+    /* expand compress rows, which is forced in constructor (MatSeqAIJCUSPARSECopyToGPU) */
+    rowst_host[0] = 0;
+    for (k = 0, i = 0; i < A->rmap->n ; i++) {
+      if (k < ncomprow && i==cprow[k]) {
+	rowst_host[i+1] = a->i[i+1];
+	k++;
+      } else rowst_host[i+1] = rowst_host[i];
+    }
+    if (k!=ncomprow) SETERRQ2(PETSC_COMM_SELF,PETSC_ERR_SUP,"%D != %D",k,ncomprow);
+    rowoffsets_gpu = new THRUSTINTARRAY32(A->rmap->n+1);
+    *rowoffsets_gpu = rowst_host; // CPU --> GPU
 
     /* compute the transpose of the upper triangular factor, i.e. the CSC */
     indexBase = cusparseGetMatIndexBase(matstruct->descr);
-    stat = cusparse_csr2csc(cusparsestruct->handle, matrix->num_rows,
-                            matrix->num_cols, matrix->num_entries,
+    stat = cusparse_csr2csc(cusparsestruct->handle, A->rmap->n,
+                            A->cmap->n, matrix->num_entries,
                             matrix->values->data().get(),
-                            matrix->row_offsets->data().get(),
+                            rowoffsets_gpu->data().get(),
                             matrix->column_indices->data().get(),
                             matrixT->values->data().get(),
                             matrixT->column_indices->data().get(),
@@ -878,9 +926,8 @@ static PetscErrorCode MatSeqAIJCUSPARSEGenerateTransposeForMult(Mat A)
 
     /* assign the pointer */
     matstructT->mat = matrixT;
-
+    ierr = PetscLogCpuToGpu(((A->rmap->n+1)+(a->nz))*sizeof(int)+(3+a->nz)*sizeof(PetscScalar));CHKERRQ(ierr);
   } else if (cusparsestruct->format==MAT_CUSPARSE_ELL || cusparsestruct->format==MAT_CUSPARSE_HYB) {
-#if CUDA_VERSION>=5000
     /* First convert HYB to CSR */
     CsrMatrix *temp= new CsrMatrix;
     temp->num_rows = A->rmap->n;
@@ -929,6 +976,7 @@ static PetscErrorCode MatSeqAIJCUSPARSEGenerateTransposeForMult(Mat A)
 
     /* assign the pointer */
     matstructT->mat = hybMat;
+    ierr = PetscLogCpuToGpu((2*(((A->rmap->n+1)+(a->nz))*sizeof(int)+(a->nz)*sizeof(PetscScalar)))+3*sizeof(PetscScalar));CHKERRQ(ierr);
 
     /* delete temporaries */
     if (tempT) {
@@ -943,20 +991,17 @@ static PetscErrorCode MatSeqAIJCUSPARSEGenerateTransposeForMult(Mat A)
       if (temp->row_offsets) delete (THRUSTINTARRAY32*) temp->row_offsets;
       delete (CsrMatrix*) temp;
     }
-#else
-    SETERRQ(PETSC_COMM_SELF,PETSC_ERR_SUP,"ELL (Ellpack) and HYB (Hybrid) storage format for the Matrix Transpose (in MatMultTranspose) require CUDA 5.0 or later.");
-#endif
   }
   /* assign the compressed row indices */
   matstructT->cprowIndices = new THRUSTINTARRAY;
   matstructT->cprowIndices->resize(A->cmap->n);
   thrust::sequence(matstructT->cprowIndices->begin(), matstructT->cprowIndices->end());
-
   /* assign the pointer */
   ((Mat_SeqAIJCUSPARSE*)A->spptr)->matTranspose = matstructT;
   PetscFunctionReturn(0);
 }
 
+/* Why do we need to analyze the tranposed matrix again? Can't we just use op(A) = CUSPARSE_OPERATION_TRANSPOSE in MatSolve_SeqAIJCUSPARSE? */
 static PetscErrorCode MatSolveTranspose_SeqAIJCUSPARSE(Mat A,Vec bb,Vec xx)
 {
   PetscInt                              n = xx->map->n;
@@ -985,6 +1030,7 @@ static PetscErrorCode MatSolveTranspose_SeqAIJCUSPARSE(Mat A,Vec bb,Vec xx)
   xGPU = thrust::device_pointer_cast(xarray);
   bGPU = thrust::device_pointer_cast(barray);
 
+  ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
   /* First, reorder with the row permutation */
   thrust::copy(thrust::make_permutation_iterator(bGPU, cusparseTriFactors->rpermIndices->begin()),
                thrust::make_permutation_iterator(bGPU+n, cusparseTriFactors->rpermIndices->end()),
@@ -1020,8 +1066,8 @@ static PetscErrorCode MatSolveTranspose_SeqAIJCUSPARSE(Mat A,Vec bb,Vec xx)
   ierr = VecCUDARestoreArrayRead(bb,&barray);CHKERRQ(ierr);
   ierr = VecCUDARestoreArrayWrite(xx,&xarray);CHKERRQ(ierr);
   ierr = WaitForGPU();CHKERRCUDA(ierr);
-
-  ierr = PetscLogFlops(2.0*cusparseTriFactors->nnz - A->cmap->n);CHKERRQ(ierr);
+  ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
+  ierr = PetscLogGpuFlops(2.0*cusparseTriFactors->nnz - A->cmap->n);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -1048,6 +1094,7 @@ static PetscErrorCode MatSolveTranspose_SeqAIJCUSPARSE_NaturalOrdering(Mat A,Vec
   ierr = VecCUDAGetArrayWrite(xx,&xarray);CHKERRQ(ierr);
   ierr = VecCUDAGetArrayRead(bb,&barray);CHKERRQ(ierr);
 
+  ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
   /* First, solve U */
   stat = cusparse_solve(cusparseTriFactors->handle, upTriFactorT->solveOp,
                         upTriFactorT->csrMat->num_rows, &PETSC_CUSPARSE_ONE, upTriFactorT->descr,
@@ -1070,7 +1117,8 @@ static PetscErrorCode MatSolveTranspose_SeqAIJCUSPARSE_NaturalOrdering(Mat A,Vec
   ierr = VecCUDARestoreArrayRead(bb,&barray);CHKERRQ(ierr);
   ierr = VecCUDARestoreArrayWrite(xx,&xarray);CHKERRQ(ierr);
   ierr = WaitForGPU();CHKERRCUDA(ierr);
-  ierr = PetscLogFlops(2.0*cusparseTriFactors->nnz - A->cmap->n);CHKERRQ(ierr);
+  ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
+  ierr = PetscLogGpuFlops(2.0*cusparseTriFactors->nnz - A->cmap->n);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -1095,10 +1143,11 @@ static PetscErrorCode MatSolve_SeqAIJCUSPARSE(Mat A,Vec bb,Vec xx)
   xGPU = thrust::device_pointer_cast(xarray);
   bGPU = thrust::device_pointer_cast(barray);
 
+  ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
   /* First, reorder with the row permutation */
   thrust::copy(thrust::make_permutation_iterator(bGPU, cusparseTriFactors->rpermIndices->begin()),
                thrust::make_permutation_iterator(bGPU, cusparseTriFactors->rpermIndices->end()),
-               xGPU);
+               tempGPU->begin());
 
   /* Next, solve L */
   stat = cusparse_solve(cusparseTriFactors->handle, loTriFactor->solveOp,
@@ -1107,7 +1156,7 @@ static PetscErrorCode MatSolve_SeqAIJCUSPARSE(Mat A,Vec bb,Vec xx)
                         loTriFactor->csrMat->row_offsets->data().get(),
                         loTriFactor->csrMat->column_indices->data().get(),
                         loTriFactor->solveInfo,
-                        xarray, tempGPU->data().get());CHKERRCUDA(stat);
+                        tempGPU->data().get(), xarray);CHKERRCUDA(stat);
 
   /* Then, solve U */
   stat = cusparse_solve(cusparseTriFactors->handle, upTriFactor->solveOp,
@@ -1116,20 +1165,18 @@ static PetscErrorCode MatSolve_SeqAIJCUSPARSE(Mat A,Vec bb,Vec xx)
                         upTriFactor->csrMat->row_offsets->data().get(),
                         upTriFactor->csrMat->column_indices->data().get(),
                         upTriFactor->solveInfo,
-                        tempGPU->data().get(), xarray);CHKERRCUDA(stat);
+                        xarray, tempGPU->data().get());CHKERRCUDA(stat);
 
-  /* Last, copy the solution, xGPU, into a temporary with the column permutation ... can't be done in place. */
-  thrust::copy(thrust::make_permutation_iterator(xGPU, cusparseTriFactors->cpermIndices->begin()),
-               thrust::make_permutation_iterator(xGPU, cusparseTriFactors->cpermIndices->end()),
-               tempGPU->begin());
-
-  /* Copy the temporary to the full solution. */
-  thrust::copy(tempGPU->begin(), tempGPU->end(), xGPU);
+  /* Last, reorder with the column permutation */
+  thrust::copy(thrust::make_permutation_iterator(tempGPU->begin(), cusparseTriFactors->cpermIndices->begin()),
+               thrust::make_permutation_iterator(tempGPU->begin(), cusparseTriFactors->cpermIndices->end()),
+               xGPU);
 
   ierr = VecCUDARestoreArrayRead(bb,&barray);CHKERRQ(ierr);
   ierr = VecCUDARestoreArrayWrite(xx,&xarray);CHKERRQ(ierr);
   ierr = WaitForGPU();CHKERRCUDA(ierr);
-  ierr = PetscLogFlops(2.0*cusparseTriFactors->nnz - A->cmap->n);CHKERRQ(ierr);
+  ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
+  ierr = PetscLogGpuFlops(2.0*cusparseTriFactors->nnz - A->cmap->n);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -1149,6 +1196,7 @@ static PetscErrorCode MatSolve_SeqAIJCUSPARSE_NaturalOrdering(Mat A,Vec bb,Vec x
   ierr = VecCUDAGetArrayWrite(xx,&xarray);CHKERRQ(ierr);
   ierr = VecCUDAGetArrayRead(bb,&barray);CHKERRQ(ierr);
 
+  ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
   /* First, solve L */
   stat = cusparse_solve(cusparseTriFactors->handle, loTriFactor->solveOp,
                         loTriFactor->csrMat->num_rows, &PETSC_CUSPARSE_ONE, loTriFactor->descr,
@@ -1170,13 +1218,13 @@ static PetscErrorCode MatSolve_SeqAIJCUSPARSE_NaturalOrdering(Mat A,Vec bb,Vec x
   ierr = VecCUDARestoreArrayRead(bb,&barray);CHKERRQ(ierr);
   ierr = VecCUDARestoreArrayWrite(xx,&xarray);CHKERRQ(ierr);
   ierr = WaitForGPU();CHKERRCUDA(ierr);
-  ierr = PetscLogFlops(2.0*cusparseTriFactors->nnz - A->cmap->n);CHKERRQ(ierr);
+  ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
+  ierr = PetscLogGpuFlops(2.0*cusparseTriFactors->nnz - A->cmap->n);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
 static PetscErrorCode MatSeqAIJCUSPARSECopyToGPU(Mat A)
 {
-
   Mat_SeqAIJCUSPARSE           *cusparsestruct = (Mat_SeqAIJCUSPARSE*)A->spptr;
   Mat_SeqAIJCUSPARSEMultStruct *matstruct = (Mat_SeqAIJCUSPARSEMultStruct*)cusparsestruct->mat;
   Mat_SeqAIJ                   *a = (Mat_SeqAIJ*)A->data;
@@ -1186,12 +1234,13 @@ static PetscErrorCode MatSeqAIJCUSPARSECopyToGPU(Mat A)
   cudaError_t                  err;
 
   PetscFunctionBegin;
-  if (A->valid_GPU_matrix == PETSC_OFFLOAD_UNALLOCATED || A->valid_GPU_matrix == PETSC_OFFLOAD_CPU) {
+  if (A->offloadmask == PETSC_OFFLOAD_UNALLOCATED || A->offloadmask == PETSC_OFFLOAD_CPU) {
     ierr = PetscLogEventBegin(MAT_CUSPARSECopyToGPU,A,0,0,0);CHKERRQ(ierr);
     if (A->assembled && A->nonzerostate == cusparsestruct->nonzerostate && cusparsestruct->format == MAT_CUSPARSE_CSR) {
       CsrMatrix *matrix = (CsrMatrix*)matstruct->mat;
       /* copy values only */
       matrix->values->assign(a->a, a->a+a->nz);
+      ierr = PetscLogCpuToGpu((a->nz)*sizeof(PetscScalar));CHKERRQ(ierr);
     } else {
       MatSeqAIJCUSPARSEMultStruct_Destroy(&matstruct,cusparsestruct->format);
       try {
@@ -1253,7 +1302,6 @@ static PetscErrorCode MatSeqAIJCUSPARSECopyToGPU(Mat A)
           matstruct->mat = matrix;
 
         } else if (cusparsestruct->format==MAT_CUSPARSE_ELL || cusparsestruct->format==MAT_CUSPARSE_HYB) {
-#if CUDA_VERSION>=4020
           CsrMatrix *matrix= new CsrMatrix;
           matrix->num_rows = m;
           matrix->num_cols = A->cmap->n;
@@ -1285,12 +1333,12 @@ static PetscErrorCode MatSeqAIJCUSPARSECopyToGPU(Mat A)
             if (matrix->row_offsets) delete (THRUSTINTARRAY32*)matrix->row_offsets;
             delete (CsrMatrix*)matrix;
           }
-#endif
         }
 
         /* assign the compressed row indices */
         matstruct->cprowIndices = new THRUSTINTARRAY(m);
         matstruct->cprowIndices->assign(ridx,ridx+m);
+        ierr = PetscLogCpuToGpu(((m+1)+(a->nz))*sizeof(int)+m*sizeof(PetscInt)+(3+(a->nz))*sizeof(PetscScalar));CHKERRQ(ierr);
 
         /* assign the pointer */
         cusparsestruct->mat = matstruct;
@@ -1306,7 +1354,7 @@ static PetscErrorCode MatSeqAIJCUSPARSECopyToGPU(Mat A)
       cusparsestruct->nonzerostate = A->nonzerostate;
     }
     ierr = WaitForGPU();CHKERRCUDA(ierr);
-    A->valid_GPU_matrix = PETSC_OFFLOAD_BOTH;
+    A->offloadmask = PETSC_OFFLOAD_BOTH;
     ierr = PetscLogEventEnd(MAT_CUSPARSECopyToGPU,A,0,0,0);CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
@@ -1350,9 +1398,14 @@ static PetscErrorCode MatMultTranspose_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy)
     matstructT = (Mat_SeqAIJCUSPARSEMultStruct*)cusparsestruct->matTranspose;
   }
   ierr = VecCUDAGetArrayRead(xx,&xarray);CHKERRQ(ierr);
-  ierr = VecSet(yy,0);CHKERRQ(ierr);
   ierr = VecCUDAGetArrayWrite(yy,&yarray);CHKERRQ(ierr);
+  if (yy->map->n) {
+    PetscInt                     n = yy->map->n;
+    cudaError_t                  err;
+    err = cudaMemset(yarray,0,n*sizeof(PetscScalar));CHKERRCUDA(err); /* hack to fix numerical errors from reading output vector yy, apparently */
+  }
 
+  ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
   if (cusparsestruct->format==MAT_CUSPARSE_CSR) {
     CsrMatrix *mat = (CsrMatrix*)matstructT->mat;
     stat = cusparse_csr_spmv(cusparsestruct->handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
@@ -1362,20 +1415,17 @@ static PetscErrorCode MatMultTranspose_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy)
                              mat->column_indices->data().get(), xarray, matstructT->beta_zero,
                              yarray);CHKERRCUDA(stat);
   } else {
-#if CUDA_VERSION>=4020
     cusparseHybMat_t hybMat = (cusparseHybMat_t)matstructT->mat;
     stat = cusparse_hyb_spmv(cusparsestruct->handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
                              matstructT->alpha, matstructT->descr, hybMat,
                              xarray, matstructT->beta_zero,
                              yarray);CHKERRCUDA(stat);
-#endif
   }
   ierr = VecCUDARestoreArrayRead(xx,&xarray);CHKERRQ(ierr);
   ierr = VecCUDARestoreArrayWrite(yy,&yarray);CHKERRQ(ierr);
-  if (!cusparsestruct->stream) {
-    ierr = WaitForGPU();CHKERRCUDA(ierr);
-  }
-  ierr = PetscLogFlops(2.0*a->nz - cusparsestruct->nonzerorow);CHKERRQ(ierr);
+  ierr = WaitForGPU();CHKERRCUDA(ierr);
+  ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
+  ierr = PetscLogGpuFlops(2.0*a->nz - cusparsestruct->nonzerorow);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -1389,17 +1439,24 @@ static PetscErrorCode MatMultAdd_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy,Vec zz)
   PetscScalar                  *zarray,*dptr,*beta;
   PetscErrorCode               ierr;
   cusparseStatus_t             stat;
+  PetscBool                    cmpr; /* if the matrix has been compressed (zero rows) */
 
   PetscFunctionBegin;
   /* The line below is necessary due to the operations that modify the matrix on the CPU (axpy, scale, etc) */
   ierr = MatSeqAIJCUSPARSECopyToGPU(A);CHKERRQ(ierr);
   matstruct = (Mat_SeqAIJCUSPARSEMultStruct*)cusparsestruct->mat;
   try {
+    cmpr = (PetscBool)(cusparsestruct->workVector->size() == (thrust::detail::vector_base<PetscScalar, thrust::device_malloc_allocator<PetscScalar> >::size_type)(A->rmap->n));
     ierr = VecCUDAGetArrayRead(xx,&xarray);CHKERRQ(ierr);
-    ierr = VecCUDAGetArrayReadWrite(zz,&zarray);CHKERRQ(ierr);
-    dptr = cusparsestruct->workVector->size() == (thrust::detail::vector_base<PetscScalar, thrust::device_malloc_allocator<PetscScalar> >::size_type)(A->rmap->n) ? zarray : cusparsestruct->workVector->data().get();
+    if (yy && !cmpr) { /* MatMultAdd with noncompressed storage -> need uptodate zz vector */
+      ierr = VecCUDAGetArray(zz,&zarray);CHKERRQ(ierr);
+    } else {
+      ierr = VecCUDAGetArrayWrite(zz,&zarray);CHKERRQ(ierr);
+    }
+    dptr = cmpr ? zarray : cusparsestruct->workVector->data().get();
     beta = (yy == zz && dptr == zarray) ? matstruct->beta_one : matstruct->beta_zero;
 
+    ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
     /* csr_spmv is multiply add */
     if (cusparsestruct->format == MAT_CUSPARSE_CSR) {
       /* here we need to be careful to set the number of rows in the multiply to the
@@ -1413,16 +1470,15 @@ static PetscErrorCode MatMultAdd_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy,Vec zz)
                                mat->column_indices->data().get(), xarray, beta,
                                dptr);CHKERRCUDA(stat);
     } else {
-#if CUDA_VERSION>=4020
-      cusparseHybMat_t hybMat = (cusparseHybMat_t)matstruct->mat;
       if (cusparsestruct->workVector->size()) {
+        cusparseHybMat_t hybMat = (cusparseHybMat_t)matstruct->mat;
         stat = cusparse_hyb_spmv(cusparsestruct->handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
                                  matstruct->alpha, matstruct->descr, hybMat,
                                  xarray, beta,
                                  dptr);CHKERRCUDA(stat);
       }
-#endif
     }
+    ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
 
     if (yy) {
       if (dptr != zarray) {
@@ -1431,9 +1487,10 @@ static PetscErrorCode MatMultAdd_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy,Vec zz)
         ierr = VecAXPY_SeqCUDA(zz,1.0,yy);CHKERRQ(ierr);
       }
     } else if (dptr != zarray) {
-      ierr = VecSet(zz,0);CHKERRQ(ierr);
+      ierr = VecSet_SeqCUDA(zz,0);CHKERRQ(ierr);
     }
     /* scatter the data from the temporary into the full vector with a += operation */
+    ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
     if (dptr != zarray) {
       thrust::device_ptr<PetscScalar> zptr;
 
@@ -1442,17 +1499,18 @@ static PetscErrorCode MatMultAdd_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy,Vec zz)
                        thrust::make_zip_iterator(thrust::make_tuple(cusparsestruct->workVector->begin(), thrust::make_permutation_iterator(zptr, matstruct->cprowIndices->begin()))) + cusparsestruct->workVector->size(),
                        VecCUDAPlusEquals());
     }
+    ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
     ierr = VecCUDARestoreArrayRead(xx,&xarray);CHKERRQ(ierr);
-    ierr = VecCUDARestoreArrayReadWrite(zz,&zarray);CHKERRQ(ierr);
+    if (yy && !cmpr) {
+      ierr = VecCUDARestoreArray(zz,&zarray);CHKERRQ(ierr);
+    } else {
+      ierr = VecCUDARestoreArrayWrite(zz,&zarray);CHKERRQ(ierr);
+    }
   } catch(char *ex) {
     SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"CUSPARSE error: %s", ex);
   }
-  if (!yy) { /* MatMult */
-    if (!cusparsestruct->stream) {
-      ierr = WaitForGPU();CHKERRCUDA(ierr);
-    }
-  }
-  ierr = PetscLogFlops(2.0*a->nz);CHKERRQ(ierr);
+  ierr = WaitForGPU();CHKERRCUDA(ierr);
+  ierr = PetscLogGpuFlops(2.0*a->nz);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -1461,9 +1519,8 @@ static PetscErrorCode MatMultTransposeAdd_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy,Vec
   Mat_SeqAIJ                      *a = (Mat_SeqAIJ*)A->data;
   Mat_SeqAIJCUSPARSE              *cusparsestruct = (Mat_SeqAIJCUSPARSE*)A->spptr;
   Mat_SeqAIJCUSPARSEMultStruct    *matstructT;
-  thrust::device_ptr<PetscScalar> zptr;
   const PetscScalar               *xarray;
-  PetscScalar                     *zarray;
+  PetscScalar                     *zarray,*dptr,*beta;
   PetscErrorCode                  ierr;
   cusparseStatus_t                stat;
 
@@ -1479,9 +1536,11 @@ static PetscErrorCode MatMultTransposeAdd_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy,Vec
   try {
     ierr = VecCopy_SeqCUDA(yy,zz);CHKERRQ(ierr);
     ierr = VecCUDAGetArrayRead(xx,&xarray);CHKERRQ(ierr);
-    ierr = VecCUDAGetArrayReadWrite(zz,&zarray);CHKERRQ(ierr);
-    zptr = thrust::device_pointer_cast(zarray);
+    ierr = VecCUDAGetArray(zz,&zarray);CHKERRQ(ierr);
+    dptr = cusparsestruct->workVector->size() == (thrust::detail::vector_base<PetscScalar, thrust::device_malloc_allocator<PetscScalar> >::size_type)(A->cmap->n) ? zarray : cusparsestruct->workVector->data().get();
+    beta = (yy == zz && dptr == zarray) ? matstructT->beta_one : matstructT->beta_zero;
 
+    ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
     /* multiply add with matrix transpose */
     if (cusparsestruct->format==MAT_CUSPARSE_CSR) {
       CsrMatrix *mat = (CsrMatrix*)matstructT->mat;
@@ -1492,33 +1551,44 @@ static PetscErrorCode MatMultTransposeAdd_SeqAIJCUSPARSE(Mat A,Vec xx,Vec yy,Vec
                                mat->num_rows, mat->num_cols,
                                mat->num_entries, matstructT->alpha, matstructT->descr,
                                mat->values->data().get(), mat->row_offsets->data().get(),
-                               mat->column_indices->data().get(), xarray, matstructT->beta_zero,
-                               cusparsestruct->workVector->data().get());CHKERRCUDA(stat);
+                               mat->column_indices->data().get(), xarray, beta,
+                               dptr);CHKERRCUDA(stat);
     } else {
-#if CUDA_VERSION>=4020
       cusparseHybMat_t hybMat = (cusparseHybMat_t)matstructT->mat;
       if (cusparsestruct->workVector->size()) {
         stat = cusparse_hyb_spmv(cusparsestruct->handle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-            matstructT->alpha, matstructT->descr, hybMat,
-            xarray, matstructT->beta_zero,
-            cusparsestruct->workVector->data().get());CHKERRCUDA(stat);
+                                 matstructT->alpha, matstructT->descr, hybMat,
+                                 xarray, beta,
+                                 dptr);CHKERRCUDA(stat);
       }
-#endif
     }
+    ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
 
+    if (dptr != zarray) {
+      ierr = VecCopy_SeqCUDA(yy,zz);CHKERRQ(ierr);
+    } else if (zz != yy) {
+      ierr = VecAXPY_SeqCUDA(zz,1.0,yy);CHKERRQ(ierr);
+    }
     /* scatter the data from the temporary into the full vector with a += operation */
-    thrust::for_each(thrust::make_zip_iterator(thrust::make_tuple(cusparsestruct->workVector->begin(), thrust::make_permutation_iterator(zptr, matstructT->cprowIndices->begin()))),
-        thrust::make_zip_iterator(thrust::make_tuple(cusparsestruct->workVector->begin(), thrust::make_permutation_iterator(zptr, matstructT->cprowIndices->begin()))) + A->cmap->n,
-        VecCUDAPlusEquals());
+    ierr = PetscLogGpuTimeBegin();CHKERRQ(ierr);
+    if (dptr != zarray) {
+      thrust::device_ptr<PetscScalar> zptr;
 
+      zptr = thrust::device_pointer_cast(zarray);
+
+      /* scatter the data from the temporary into the full vector with a += operation */
+      thrust::for_each(thrust::make_zip_iterator(thrust::make_tuple(cusparsestruct->workVector->begin(), thrust::make_permutation_iterator(zptr, matstructT->cprowIndices->begin()))),
+                       thrust::make_zip_iterator(thrust::make_tuple(cusparsestruct->workVector->begin(), thrust::make_permutation_iterator(zptr, matstructT->cprowIndices->begin()))) + A->cmap->n,
+                       VecCUDAPlusEquals());
+    }
+    ierr = PetscLogGpuTimeEnd();CHKERRQ(ierr);
     ierr = VecCUDARestoreArrayRead(xx,&xarray);CHKERRQ(ierr);
-    ierr = VecCUDARestoreArrayReadWrite(zz,&zarray);CHKERRQ(ierr);
-
+    ierr = VecCUDARestoreArray(zz,&zarray);CHKERRQ(ierr);
   } catch(char *ex) {
     SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"CUSPARSE error: %s", ex);
   }
-  ierr = WaitForGPU();CHKERRCUDA(ierr);
-  ierr = PetscLogFlops(2.0*a->nz);CHKERRQ(ierr);
+  ierr = WaitForGPU();CHKERRCUDA(ierr); /* is this needed? just for yy==0 in Mult */
+  ierr = PetscLogGpuFlops(2.0*a->nz);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -1528,10 +1598,10 @@ static PetscErrorCode MatAssemblyEnd_SeqAIJCUSPARSE(Mat A,MatAssemblyType mode)
 
   PetscFunctionBegin;
   ierr = MatAssemblyEnd_SeqAIJ(A,mode);CHKERRQ(ierr);
-  if (A->factortype==MAT_FACTOR_NONE) {
+  if (mode == MAT_FLUSH_ASSEMBLY) PetscFunctionReturn(0);
+  if (A->factortype == MAT_FACTOR_NONE) {
     ierr = MatSeqAIJCUSPARSECopyToGPU(A);CHKERRQ(ierr);
   }
-  if (mode == MAT_FLUSH_ASSEMBLY) PetscFunctionReturn(0);
   A->ops->mult             = MatMult_SeqAIJCUSPARSE;
   A->ops->multadd          = MatMultAdd_SeqAIJCUSPARSE;
   A->ops->multtranspose    = MatMultTranspose_SeqAIJCUSPARSE;
@@ -1548,7 +1618,7 @@ static PetscErrorCode MatAssemblyEnd_SeqAIJCUSPARSE(Mat A,MatAssemblyType mode)
    the parameter nz (or the array nnz).  By setting these parameters accurately,
    performance during matrix assembly can be increased by more than a factor of 50.
 
-   Collective on MPI_Comm
+   Collective
 
    Input Parameters:
 +  comm - MPI communicator, set to PETSC_COMM_SELF
@@ -1605,7 +1675,7 @@ static PetscErrorCode MatDestroy_SeqAIJCUSPARSE(Mat A)
 
   PetscFunctionBegin;
   if (A->factortype==MAT_FACTOR_NONE) {
-    if (A->valid_GPU_matrix != PETSC_OFFLOAD_UNALLOCATED) {
+    if (A->offloadmask != PETSC_OFFLOAD_UNALLOCATED) {
       ierr = MatSeqAIJCUSPARSE_Destroy((Mat_SeqAIJCUSPARSE**)&A->spptr);CHKERRQ(ierr);
     }
   } else {
@@ -1638,10 +1708,8 @@ static PetscErrorCode MatDuplicate_SeqAIJCUSPARSE(Mat A,MatDuplicateOption cpval
     ((Mat_SeqAIJCUSPARSE*)C->spptr)->workVector   = 0;
     ((Mat_SeqAIJCUSPARSE*)C->spptr)->format       = MAT_CUSPARSE_CSR;
     ((Mat_SeqAIJCUSPARSE*)C->spptr)->stream       = 0;
-    ((Mat_SeqAIJCUSPARSE*)C->spptr)->handle       = 0;
     stat = cusparseCreate(&handle);CHKERRCUDA(stat);
     ((Mat_SeqAIJCUSPARSE*)C->spptr)->handle       = handle;
-    ((Mat_SeqAIJCUSPARSE*)C->spptr)->stream       = 0;
     ((Mat_SeqAIJCUSPARSE*)C->spptr)->nonzerostate = 0;
   } else {
     /* NEXT, set the pointers to the triangular factors */
@@ -1670,7 +1738,7 @@ static PetscErrorCode MatDuplicate_SeqAIJCUSPARSE(Mat A,MatDuplicateOption cpval
 
   ierr = PetscObjectChangeTypeName((PetscObject)C,MATSEQAIJCUSPARSE);CHKERRQ(ierr);
 
-  C->valid_GPU_matrix = PETSC_OFFLOAD_UNALLOCATED;
+  C->offloadmask = PETSC_OFFLOAD_UNALLOCATED;
 
   ierr = PetscObjectComposeFunction((PetscObject)C, "MatCUSPARSESetFormat_C", MatCUSPARSESetFormat_SeqAIJCUSPARSE);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -1695,10 +1763,8 @@ PETSC_EXTERN PetscErrorCode MatConvert_SeqAIJ_SeqAIJCUSPARSE(Mat B)
     ((Mat_SeqAIJCUSPARSE*)B->spptr)->workVector   = 0;
     ((Mat_SeqAIJCUSPARSE*)B->spptr)->format       = MAT_CUSPARSE_CSR;
     ((Mat_SeqAIJCUSPARSE*)B->spptr)->stream       = 0;
-    ((Mat_SeqAIJCUSPARSE*)B->spptr)->handle       = 0;
     stat = cusparseCreate(&handle);CHKERRCUDA(stat);
     ((Mat_SeqAIJCUSPARSE*)B->spptr)->handle       = handle;
-    ((Mat_SeqAIJCUSPARSE*)B->spptr)->stream       = 0;
     ((Mat_SeqAIJCUSPARSE*)B->spptr)->nonzerostate = 0;
   } else {
     /* NEXT, set the pointers to the triangular factors */
@@ -1710,7 +1776,6 @@ PETSC_EXTERN PetscErrorCode MatConvert_SeqAIJ_SeqAIJCUSPARSE(Mat B)
     ((Mat_SeqAIJCUSPARSETriFactors*)B->spptr)->rpermIndices            = 0;
     ((Mat_SeqAIJCUSPARSETriFactors*)B->spptr)->cpermIndices            = 0;
     ((Mat_SeqAIJCUSPARSETriFactors*)B->spptr)->workVector              = 0;
-    ((Mat_SeqAIJCUSPARSETriFactors*)B->spptr)->handle                  = 0;
     stat = cusparseCreate(&handle);CHKERRCUDA(stat);
     ((Mat_SeqAIJCUSPARSETriFactors*)B->spptr)->handle                  = handle;
     ((Mat_SeqAIJCUSPARSETriFactors*)B->spptr)->nnz                     = 0;
@@ -1727,7 +1792,7 @@ PETSC_EXTERN PetscErrorCode MatConvert_SeqAIJ_SeqAIJCUSPARSE(Mat B)
 
   ierr = PetscObjectChangeTypeName((PetscObject)B,MATSEQAIJCUSPARSE);CHKERRQ(ierr);
 
-  B->valid_GPU_matrix = PETSC_OFFLOAD_UNALLOCATED;
+  B->offloadmask = PETSC_OFFLOAD_UNALLOCATED;
 
   ierr = PetscObjectComposeFunction((PetscObject)B, "MatCUSPARSESetFormat_C", MatCUSPARSESetFormat_SeqAIJCUSPARSE);CHKERRQ(ierr);
   PetscFunctionReturn(0);
@@ -1739,7 +1804,7 @@ PETSC_EXTERN PetscErrorCode MatCreate_SeqAIJCUSPARSE(Mat B)
 
   PetscFunctionBegin;
   ierr = MatCreate_SeqAIJ(B);CHKERRQ(ierr);
-  ierr = MatConvert_SeqAIJ_SeqAIJCUSPARSE(B);
+  ierr = MatConvert_SeqAIJ_SeqAIJCUSPARSE(B);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -1753,7 +1818,7 @@ PETSC_EXTERN PetscErrorCode MatCreate_SeqAIJCUSPARSE(Mat B)
    Options Database Keys:
 +  -mat_type aijcusparse - sets the matrix type to "seqaijcusparse" during a call to MatSetFromOptions()
 .  -mat_cusparse_storage_format csr - sets the storage format of matrices (for MatMult and factors in MatSolve) during a call to MatSetFromOptions(). Other options include ell (ellpack) or hyb (hybrid).
-.  -mat_cusparse_mult_storage_format csr - sets the storage format of matrices (for MatMult) during a call to MatSetFromOptions(). Other options include ell (ellpack) or hyb (hybrid).
+-  -mat_cusparse_mult_storage_format csr - sets the storage format of matrices (for MatMult) during a call to MatSetFromOptions(). Other options include ell (ellpack) or hyb (hybrid).
 
   Level: beginner
 

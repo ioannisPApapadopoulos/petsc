@@ -808,9 +808,8 @@ static PetscErrorCode SetupDiscretization(DM dm, AppCtx *user)
   ierr = PetscObjectGetComm((PetscObject) dm, &comm);CHKERRQ(ierr);
   ierr = PetscFECreateDefault(comm, dim, dim, PETSC_FALSE, "velocity_", PETSC_DEFAULT, &fe[0]);CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject) fe[0], "velocity");CHKERRQ(ierr);
-  ierr = PetscFEGetQuadrature(fe[0], &q);CHKERRQ(ierr);
   ierr = PetscFECreateDefault(comm, dim, 1, PETSC_FALSE, "porosity_", PETSC_DEFAULT, &fe[1]);CHKERRQ(ierr);
-  ierr = PetscFESetQuadrature(fe[1], q);CHKERRQ(ierr);
+  ierr = PetscFECopyQuadrature(fe[0], fe[1]);CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject) fe[1], "porosity");CHKERRQ(ierr);
 
   ierr = PetscFVCreate(PetscObjectComm((PetscObject) dm), &fv);CHKERRQ(ierr);
@@ -818,6 +817,7 @@ static PetscErrorCode SetupDiscretization(DM dm, AppCtx *user)
   ierr = PetscFVSetFromOptions(fv);CHKERRQ(ierr);
   ierr = PetscFVSetNumComponents(fv, 1);CHKERRQ(ierr);
   ierr = PetscFVSetSpatialDimension(fv, dim);CHKERRQ(ierr);
+  ierr = PetscFEGetQuadrature(fe[0], &q);CHKERRQ(ierr);
   ierr = PetscFVSetQuadrature(fv, q);CHKERRQ(ierr);
 
   ierr = DMSetField(dm, 0, NULL, (PetscObject) fe[0]);CHKERRQ(ierr);
@@ -873,20 +873,19 @@ static PetscErrorCode SetInitialConditionFVM(DM dm, Vec X, PetscInt field, Petsc
   Vec                cellgeom;
   const PetscScalar *cgeom;
   PetscScalar       *x;
-  PetscInt           dim, Nf, cStart, cEnd, cEndInterior, c;
+  PetscInt           dim, Nf, cStart, cEnd, c;
   PetscErrorCode     ierr;
 
   PetscFunctionBeginUser;
   ierr = DMGetDS(dm, &prob);CHKERRQ(ierr);
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
   ierr = PetscDSGetNumFields(prob, &Nf);CHKERRQ(ierr);
-  ierr = DMPlexGetHybridBounds(dm, &cEndInterior, NULL, NULL, NULL);CHKERRQ(ierr);
   ierr = DMPlexTSGetGeometryFVM(dm, NULL, &cellgeom, NULL);CHKERRQ(ierr);
   ierr = VecGetDM(cellgeom, &dmCell);CHKERRQ(ierr);
-  ierr = DMPlexGetHeightStratum(dm, 0, &cStart, &cEnd);CHKERRQ(ierr);
+  ierr = DMPlexGetInteriorCellStratum(dm, &cStart, &cEnd);CHKERRQ(ierr);
   ierr = VecGetArrayRead(cellgeom, &cgeom);CHKERRQ(ierr);
   ierr = VecGetArray(X, &x);CHKERRQ(ierr);
-  for (c = cStart; c < cEndInterior; ++c) {
+  for (c = cStart; c < cEnd; ++c) {
     PetscFVCellGeom       *cg;
     PetscScalar           *xc;
 
@@ -909,15 +908,14 @@ static PetscErrorCode MonitorFunctionals(TS ts, PetscInt stepnum, PetscReal time
   const PetscScalar *x;
   PetscScalar       *a;
   PetscReal         *xnorms;
-  PetscInt           pStart, pEnd, p, Nf, f, cEndInterior;
+  PetscInt           pStart, pEnd, p, Nf, f;
   PetscErrorCode     ierr;
 
   PetscFunctionBeginUser;
   ierr = VecViewFromOptions(X, (PetscObject) ts, "-view_solution");CHKERRQ(ierr);
   ierr = VecGetDM(X, &dm);CHKERRQ(ierr);
   ierr = DMPlexTSGetGeometryFVM(dm, NULL, &cellgeom, NULL);CHKERRQ(ierr);
-  ierr = DMPlexGetHybridBounds(dm, &cEndInterior, NULL, NULL, NULL);CHKERRQ(ierr);
-  ierr = DMGetSection(dm, &s);CHKERRQ(ierr);
+  ierr = DMGetLocalSection(dm, &s);CHKERRQ(ierr);
   ierr = PetscSectionGetNumFields(s, &Nf);CHKERRQ(ierr);
   ierr = PetscSectionGetChart(s, &pStart, &pEnd);CHKERRQ(ierr);
   ierr = PetscCalloc1(Nf*2, &xnorms);CHKERRQ(ierr);
@@ -963,17 +961,17 @@ static PetscErrorCode MonitorFunctionals(TS ts, PetscInt stepnum, PetscReal time
       ierr = PetscSectionClone(s, &fs);CHKERRQ(ierr);
       ierr = PetscSectionSetFieldName(fs, 0, NULL);CHKERRQ(ierr);
       ierr = PetscSectionSetFieldName(fs, 1, name);CHKERRQ(ierr);
-      ierr = DMSetSection(fdm[f], fs);CHKERRQ(ierr);
+      ierr = DMSetLocalSection(fdm[f], fs);CHKERRQ(ierr);
       ierr = PetscSectionDestroy(&fs);CHKERRQ(ierr);
       ierr = DMGetGlobalVector(fdm[f], &fv[f]);CHKERRQ(ierr);
       ierr = PetscObjectSetName((PetscObject) fv[f], name);CHKERRQ(ierr);
       ierr = VecGetArray(fv[f], &fx[f]);CHKERRQ(ierr);
     }
-    ierr = DMPlexGetHeightStratum(dm, 0, &cStart, &cEnd);CHKERRQ(ierr);
+    ierr = DMPlexGetInteriorCellStratum(dm, &cStart, &cEnd);CHKERRQ(ierr);
     ierr = VecGetDM(cellgeom, &dmCell);CHKERRQ(ierr);
     ierr = VecGetArrayRead(cellgeom, &cgeom);CHKERRQ(ierr);
     ierr = VecGetArrayRead(X, &x);CHKERRQ(ierr);
-    for (c = cStart; c < cEndInterior; ++c) {
+    for (c = cStart; c < cEnd; ++c) {
       PetscFVCellGeom *cg;
       PetscScalar     *cx;
 
@@ -1013,11 +1011,11 @@ static PetscErrorCode MonitorFunctionals(TS ts, PetscInt stepnum, PetscReal time
 
       /* Create string with functional outputs */
       if (f % 3) {
-        ierr = PetscMemcpy(buffer, "  ", 2);CHKERRQ(ierr);
+        ierr = PetscArraycpy(buffer, "  ", 2);CHKERRQ(ierr);
         p    = buffer + 2;
       } else if (f) {
-        ierr = PetscMemcpy(buffer, newline, sizeof newline-1);CHKERRQ(ierr);
-        p    = buffer + sizeof newline - 1;
+        ierr = PetscArraycpy(buffer, newline, sizeof(newline)-1);CHKERRQ(ierr);
+        p    = buffer + sizeof(newline) - 1;
       } else {
         p = buffer;
       }
@@ -1029,11 +1027,11 @@ static PetscErrorCode MonitorFunctionals(TS ts, PetscInt stepnum, PetscReal time
 
         ftablealloc = 2*ftablealloc + countused;
         ierr = PetscMalloc1(ftablealloc, &ftablenew);CHKERRQ(ierr);
-        ierr = PetscMemcpy(ftablenew, ftable, ftableused);CHKERRQ(ierr);
+        ierr = PetscArraycpy(ftablenew, ftable, ftableused);CHKERRQ(ierr);
         ierr = PetscFree(ftable);CHKERRQ(ierr);
         ftable = ftablenew;
       }
-      ierr = PetscMemcpy(ftable+ftableused, buffer, countused);CHKERRQ(ierr);
+      ierr = PetscArraycpy(ftable+ftableused, buffer, countused);CHKERRQ(ierr);
       ftableused += countused;
       ftable[ftableused] = 0;
       /* Output vecs */
@@ -1178,10 +1176,6 @@ int main(int argc, char **argv)
     suffix: p2p1_xyper
     requires: !complex !single
     args: -dm_refine 1 -velocity_petscspace_degree 2 -porosity_petscspace_degree 1 -snes_fd_color -snes_fd_color_use_mat -mat_coloring_type greedy -pc_type lu -pc_factor_shift_type nonzero -ksp_rtol 1.0e-8 -ts_monitor -snes_error_if_not_converged -ksp_error_if_not_converged -dmts_check
-  test:
-    suffix: p2p1_xyper_ref
-    requires: !complex !single
-    args: -dm_refine 2 -velocity_petscspace_degree 2 -porosity_petscspace_degree 1 -snes_fd_color -snes_fd_color_use_mat -mat_coloring_type greedy -pc_type lu -pc_factor_shift_type nonzero -ksp_rtol 1.0e-8 -ts_monitor -snes_error_if_not_converged -ksp_error_if_not_converged -dmts_check
   #   Must check that FV BCs propagate to coarse meshes
   #   Must check that FV BC ids propagate to coarse meshes
   #   Must check that FE+FV BCs work at the same time

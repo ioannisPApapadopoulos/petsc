@@ -131,7 +131,7 @@ static PetscErrorCode KSPSolve_CG(KSP ksp)
   switch (ksp->normtype) {
     case KSP_NORM_PRECONDITIONED:
       ierr = KSP_PCApply(ksp,R,Z);CHKERRQ(ierr);               /*    z <- Br                           */
-      ierr = VecNorm(Z,NORM_2,&dp);CHKERRQ(ierr);              /*    dp <- z'*z = e'*A'*B'*B*A'*e'     */
+      ierr = VecNorm(Z,NORM_2,&dp);CHKERRQ(ierr);              /*    dp <- z'*z = e'*A'*B'*B*A*e       */
       KSPCheckNorm(ksp,dp);
       break;
     case KSP_NORM_UNPRECONDITIONED:
@@ -173,7 +173,7 @@ static PetscErrorCode KSPSolve_CG(KSP ksp)
       break;
 #if !defined(PETSC_USE_COMPLEX)
     } else if ((i > 0) && (beta*betaold < 0.0)) {
-      if (ksp->errorifnotconverged) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"Diverged due to indefinite preconditioner");
+      if (ksp->errorifnotconverged) SETERRQ2(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"Diverged due to indefinite preconditioner, beta %g, betaold %g",(double)beta,(double)betaold);
       ksp->reason = KSP_DIVERGED_INDEFINITE_PC;
       ierr        = PetscInfo(ksp,"diverging due to indefinite preconditioner\n");CHKERRQ(ierr);
       break;
@@ -197,7 +197,7 @@ static PetscErrorCode KSPSolve_CG(KSP ksp)
     betaold = beta;
 
     if ((dpi == 0.0) || ((i > 0) && ((PetscSign(PetscRealPart(dpi))*PetscSign(PetscRealPart(dpiold))) < 0.0))) {
-      if (ksp->errorifnotconverged) SETERRQ(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"Diverged due to indefinite matrix");
+      if (ksp->errorifnotconverged) SETERRQ2(PetscObjectComm((PetscObject)ksp),PETSC_ERR_NOT_CONVERGED,"Diverged due to indefinite matrix, dpi %g, dpiold %g",(double)PetscRealPart(dpi),(double)PetscRealPart(dpiold));
       ksp->reason = KSP_DIVERGED_INDEFINITE_MAT;
       ierr        = PetscInfo(ksp,"diverging due to indefinite or negative definite matrix\n");CHKERRQ(ierr);
       break;
@@ -555,9 +555,9 @@ static PetscErrorCode  KSPCGUseSingleReduction_CG(KSP ksp,PetscBool flg)
    indicate it to the KSP object.
 
    References:
-.   1. - Magnus R. Hestenes and Eduard Stiefel, Methods of Conjugate Gradients for Solving Linear Systems,
++   1. - Magnus R. Hestenes and Eduard Stiefel, Methods of Conjugate Gradients for Solving Linear Systems,
    Journal of Research of the National Bureau of Standards Vol. 49, No. 6, December 1952 Research Paper 2379
-.   2. - Josef Malek and Zdenek Strakos, Preconditioning and the Conjugate Gradient Method in the Context of Solving PDEs, 
+-   2. - Josef Malek and Zdenek Strakos, Preconditioning and the Conjugate Gradient Method in the Context of Solving PDEs, 
     SIAM, 2014.
 
 .seealso:  KSPCreate(), KSPSetType(), KSPType (for list of available types), KSP,

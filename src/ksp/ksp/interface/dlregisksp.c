@@ -21,7 +21,6 @@ static PetscBool PCPackageInitialized = PETSC_FALSE;
 
   Level: developer
 
-.keywords: Petsc, destroy, package, mathematica
 .seealso: PetscFinalize()
 @*/
 PetscErrorCode  PCFinalizePackage(void)
@@ -42,7 +41,6 @@ PetscErrorCode  PCFinalizePackage(void)
 
   Level: developer
 
-.keywords: PC, initialize, package
 .seealso: PetscInitialize()
 @*/
 PetscErrorCode  PCInitializePackage(void)
@@ -127,7 +125,6 @@ static PetscBool KSPPackageInitialized = PETSC_FALSE;
 
   Level: developer
 
-.keywords: Petsc, destroy, package, mathematica
 .seealso: PetscFinalize()
 @*/
 PetscErrorCode  KSPFinalizePackage(void)
@@ -149,7 +146,6 @@ PetscErrorCode  KSPFinalizePackage(void)
 
   Level: developer
 
-.keywords: KSP, initialize, package
 .seealso: PetscInitialize()
 @*/
 PetscErrorCode  KSPInitializePackage(void)
@@ -175,6 +171,7 @@ PetscErrorCode  KSPInitializePackage(void)
   ierr = PetscLogEventRegister("KSPSetUp",         KSP_CLASSID,&KSP_SetUp);CHKERRQ(ierr);
   ierr = PetscLogEventRegister("KSPSolve",         KSP_CLASSID,&KSP_Solve);CHKERRQ(ierr);
   ierr = PetscLogEventRegister("KSPGMRESOrthog",   KSP_CLASSID,&KSP_GMRESOrthogonalization);CHKERRQ(ierr);
+  ierr = PetscLogEventRegister("KSPSolveTranspos", KSP_CLASSID,&KSP_SolveTranspose);CHKERRQ(ierr);
   /* Process info exclusions */
   ierr = PetscOptionsGetString(NULL,NULL,"-info_exclude",logList,sizeof(logList),&opt);CHKERRQ(ierr);
   if (opt) {

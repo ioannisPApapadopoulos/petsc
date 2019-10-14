@@ -32,7 +32,7 @@ PETSC_EXTERN PetscErrorCode PCCreate_Kaczmarz(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_Telescope(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_Patch(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_LMVM(PC);
-
+PETSC_EXTERN PetscErrorCode PCCreate_HMG(PC);
 #if defined(PETSC_HAVE_ML)
 PETSC_EXTERN PetscErrorCode PCCreate_ML(PC);
 #endif
@@ -57,6 +57,10 @@ PETSC_EXTERN PetscErrorCode PCCreate_SAVIENNACL(PC);
 PETSC_EXTERN PetscErrorCode PCCreate_PARMS(PC);
 #endif
 PETSC_EXTERN PetscErrorCode PCCreate_BDDC(PC);
+PETSC_EXTERN PetscErrorCode PCCreate_Deflation(PC);
+#if defined(PETSC_HAVE_HPDDM)
+PETSC_EXTERN PetscErrorCode PCCreate_HPDDM(PC);
+#endif
 
 /*@C
    PCRegisterAll - Registers all of the preconditioners in the PC package.
@@ -67,8 +71,6 @@ PETSC_EXTERN PetscErrorCode PCCreate_BDDC(PC);
 .  path - the library where the routines are to be found (optional)
 
    Level: advanced
-
-.keywords: PC, register, all
 
 .seealso: PCRegister(), PCRegisterDestroy()
 @*/
@@ -111,6 +113,7 @@ PetscErrorCode  PCRegisterAll(void)
   ierr = PCRegister(PCKACZMARZ     ,PCCreate_Kaczmarz);CHKERRQ(ierr);
   ierr = PCRegister(PCTELESCOPE    ,PCCreate_Telescope);CHKERRQ(ierr);
   ierr = PCRegister(PCPATCH        ,PCCreate_Patch);CHKERRQ(ierr);
+  ierr = PCRegister(PCHMG          ,PCCreate_HMG);CHKERRQ(ierr);
 #if defined(PETSC_HAVE_ML)
   ierr = PCRegister(PCML           ,PCCreate_ML);CHKERRQ(ierr);
 #endif
@@ -135,5 +138,9 @@ PetscErrorCode  PCRegisterAll(void)
 #endif
   ierr = PCRegister(PCBDDC         ,PCCreate_BDDC);CHKERRQ(ierr);
   ierr = PCRegister(PCLMVM         ,PCCreate_LMVM);CHKERRQ(ierr);
+  ierr = PCRegister(PCDEFLATION    ,PCCreate_Deflation);CHKERRQ(ierr);
+#if defined(PETSC_HAVE_HPDDM)
+  ierr = PCRegister(PCHPDDM        ,PCCreate_HPDDM);CHKERRQ(ierr);
+#endif
   PetscFunctionReturn(0);
 }
