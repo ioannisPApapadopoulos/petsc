@@ -139,12 +139,10 @@ rank 1:          (20) (2)  15  0   16  1   17     -->
 
 */
 
-
 typedef struct {
   PetscInt  subdim;                       /* Indicates the mesh to create */
   PetscInt  overlap;                      /* The partition overlap */
 } AppCtx;
-
 
 PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
 {
@@ -161,7 +159,6 @@ PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   PetscFunctionReturn(0);
 }
 
-
 int main(int argc, char **argv)
 {
   DM               dm, subdm;
@@ -176,21 +173,21 @@ int main(int argc, char **argv)
   ierr = PetscInitialize(&argc, &argv, NULL, help); if (ierr) return ierr;
   comm = PETSC_COMM_WORLD;
   ierr = ProcessOptions(comm, &user);CHKERRQ(ierr);
-  ierr = MPI_Comm_rank(comm, &rank); CHKERRQ(ierr);
-  ierr = DMLabelCreate(comm, "filter", &filter); CHKERRQ(ierr);
+  ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+  ierr = DMLabelCreate(comm, "filter", &filter);CHKERRQ(ierr);
 
   /* Create parallel dm */
   const PetscInt faces[2] = {4,1};
   DM             pdm;
   PetscSF        sf;
-  ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_FALSE, faces, NULL, NULL, NULL, PETSC_TRUE, &dm); CHKERRQ(ierr);
-  ierr = DMPlexDistribute(dm, user.overlap, &sf, &pdm); CHKERRQ(ierr);
+  ierr = DMPlexCreateBoxMesh(comm, 2, PETSC_FALSE, faces, NULL, NULL, NULL, PETSC_TRUE, &dm);CHKERRQ(ierr);
+  ierr = DMPlexDistribute(dm, user.overlap, &sf, &pdm);CHKERRQ(ierr);
   if (pdm) {
-    ierr = DMDestroy(&dm); CHKERRQ(ierr);
+    ierr = DMDestroy(&dm);CHKERRQ(ierr);
     dm = pdm;
   }
   if (sf) {
-    ierr = PetscSFDestroy(&sf); CHKERRQ(ierr);
+    ierr = PetscSFDestroy(&sf);CHKERRQ(ierr);
   }
 
   /* Define height */
@@ -267,16 +264,16 @@ int main(int argc, char **argv)
     }
   }
 
-  ierr = DMPlexCreateSubDMPlex(dm, &subdm, filter, filterValue, height);
-  ierr = DMLabelDestroy(&filter); CHKERRQ(ierr);
+  ierr = DMPlexCreateSubmesh_Closure(dm, filter, filterValue, height, &subdm);
+  ierr = DMLabelDestroy(&filter);CHKERRQ(ierr);
 
   ierr = PetscObjectSetName((PetscObject) dm, "Example_DM");CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject) subdm, "Example_SubDM");CHKERRQ(ierr);
-  ierr = DMViewFromOptions(dm, NULL, "-dm_view"); CHKERRQ(ierr);
-  ierr = DMViewFromOptions(subdm, NULL, "-dm_view"); CHKERRQ(ierr);
+  ierr = DMViewFromOptions(dm, NULL, "-dm_view");CHKERRQ(ierr);
+  ierr = DMViewFromOptions(subdm, NULL, "-dm_view");CHKERRQ(ierr);
 
-  ierr = DMDestroy(&dm); CHKERRQ(ierr);
-  ierr = DMDestroy(&subdm); CHKERRQ(ierr);
+  ierr = DMDestroy(&dm);CHKERRQ(ierr);
+  ierr = DMDestroy(&subdm);CHKERRQ(ierr);
   ierr = PetscFinalize();
   return ierr;
 }
