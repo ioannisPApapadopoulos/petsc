@@ -847,6 +847,29 @@ PetscErrorCode DMSetFromOptions(DM dm)
 }
 
 /*@C
+   DMViewFromOptions - View from Options
+
+   Collective on DM
+
+   Input Parameters:
++  dm - the DM object
+-  obj - Optional object
+.  name - command line option
+
+   Level: intermediate
+.seealso:  DM, DMView, PetscObjectViewFromOptions(), DMCreate()
+@*/
+PetscErrorCode  DMViewFromOptions(DM dm,PetscObject obj,const char name[])
+{
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm,DM_CLASSID,1);
+  ierr = PetscObjectViewFromOptions((PetscObject)dm,obj,name);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
+/*@C
     DMView - Views a DM
 
     Collective on dm
@@ -1902,8 +1925,8 @@ PetscErrorCode  DMRefine(DM dm,MPI_Comm comm,DM *dmf)
    Logically Collective
 
    Input Arguments:
-+  coarse - nonlinear solver context on which to run a hook when restricting to a coarser level
-.  refinehook - function to run when setting up a coarser level
++  coarse - nonlinear solver context on which to run a hook when interpolation to a finer level
+.  refinehook - function to run when setting up a finer level
 .  interphook - function to run to update data on finer levels (once per SNESSolve())
 -  ctx - [optional] user-defined context for provide data for the hooks (may be NULL)
 
@@ -1943,12 +1966,73 @@ PetscErrorCode DMRefineHookAdd(DM coarse,PetscErrorCode (*refinehook)(DM,DM,void
   for (p=&coarse->refinehook; *p; p=&(*p)->next) { /* Scan to the end of the current list of hooks */
     if ((*p)->refinehook == refinehook && (*p)->interphook == interphook && (*p)->ctx == ctx) PetscFunctionReturn(0);
   }
-  ierr             = PetscNew(&link);CHKERRQ(ierr);
-  link->refinehook = refinehook;
-  link->interphook = interphook;
-  link->ctx        = ctx;
-  link->next       = NULL;
-  *p               = link;
+  ierr              = PetscNew(&link);CHKERRQ(ierr);
+  link->refinehook  = refinehook;
+  link->interphook  = interphook;
+  link->destroyhook = NULL;
+  link->ctx         = ctx;
+  link->next        = NULL;
+  *p                = link;
+  PetscFunctionReturn(0);
+}
+
+/*@C
+   DMRefineHookAddDestroy - add a callback to be run when destroying a hook added with DMSubDomainHookAdd
+
+   Logically Collective
+
+   Input Arguments:
++  coarse - nonlinear solver context on which to run a hook when interpolation to a finer level
+.  refinehook - function to run when setting up a finer level
+.  interphook - function to run to update data on finer levels (once per SNESSolve())
+.  ctx - [optional] user-defined context for provide data for the hooks (may be NULL)
+.  destroyhook - function to run when hook is removed
+-  destroyctx - [optional] user-defined context for the destroyhook (may be NULL)
+
+   Calling sequence of destroyhook:
+$    destroyhook(DM global,void *ctx);
+
++  coarse - coarse DM
+-  ctx - optional user-defined context
+
+   Level: advanced
+
+   Notes:
+   This function is only needed if the refinehook added by DMRefineHookAdd itself adds hooks to finer grids which need to be cleaned up.
+
+   If this function is called multiple times, the destructors will be run in the order they are added.
+
+   This function is currently not available from Fortran.
+
+.seealso: DMRefineHookRemove(), DMRefineHookAdd(), SNESFASGetInterpolation(), PetscObjectCompose(), PetscContainerCreate()
+@*/
+PetscErrorCode DMRefineHookAddDestroy(DM coarse,PetscErrorCode (*refinehook)(DM,DM,void*),PetscErrorCode (*interphook)(DM,Mat,DM,void*),void *ctx,PetscErrorCode (*destroyhook)(DM,void*),void *destroyctx)
+{
+  DMRefineHookLink *p;
+  PetscErrorCode    ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(coarse,DM_CLASSID,1);
+  for (p=&coarse->refinehook; *p; p=&(*p)->next) { /* Find the hook to add a destructor to */
+    if ((*p)->refinehook == refinehook && (*p)->interphook == interphook && (*p)->ctx == ctx) {
+      DMDestroyHookLink link,*d;
+      PetscBool         add = PETSC_TRUE;
+      for (d=&(*p)->destroyhook; *d; d=&(*d)->next) {
+        if ((*d)->destroyhook == destroyhook && (*d)->ctx == destroyctx) {
+          add = PETSC_FALSE;
+          break;
+        }
+      }
+      if (add) {
+        ierr = PetscNew(&link);CHKERRQ(ierr);
+        link->destroyhook = destroyhook;
+        link->ctx         = destroyctx;
+        link->next        = NULL;
+        *d = link;
+      }
+      break;
+    }
+  }
   PetscFunctionReturn(0);
 }
 
@@ -1966,11 +2050,12 @@ PetscErrorCode DMRefineHookAdd(DM coarse,PetscErrorCode (*refinehook)(DM,DM,void
    Level: advanced
 
    Notes:
-   This function does nothing if the hook is not in the list.
+   This function does nothing if the hook is not in the list. If the hook has destructors registered via
+   DMRefineHookAddDestroy, they will be run here.
 
    This function is currently not available from Fortran.
 
-.seealso: DMCoarsenHookRemove(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
+.seealso: DMCoarsenHookRemove(), DMRefineHookAdd(), DMRefineHookAddDestroy(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
 @*/
 PetscErrorCode DMRefineHookRemove(DM coarse,PetscErrorCode (*refinehook)(DM,DM,void*),PetscErrorCode (*interphook)(DM,Mat,DM,void*),void *ctx)
 {
@@ -1983,6 +2068,15 @@ PetscErrorCode DMRefineHookRemove(DM coarse,PetscErrorCode (*refinehook)(DM,DM,v
     if ((*p)->refinehook == refinehook && (*p)->interphook == interphook && (*p)->ctx == ctx) {
       link = *p;
       *p = link->next;
+      if (link->destroyhook) {
+        DMDestroyHookLink dlink,*d;
+        for (d=&link->destroyhook; *d; ) {
+          dlink = *d;
+          *d = dlink->next;
+          ierr = (*dlink->destroyhook)(coarse,dlink->ctx);CHKERRQ(ierr);
+          ierr = PetscFree(dlink);CHKERRQ(ierr);
+        }
+      }
       ierr = PetscFree(link);CHKERRQ(ierr);
       break;
     }
@@ -2847,7 +2941,7 @@ $    restricthook(DM fine,Mat mrestrict,Vec rscale,Mat inject,DM coarse,void *ct
 
    This function is currently not available from Fortran.
 
-.seealso: DMCoarsenHookRemove(), DMRefineHookAdd(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
+.seealso: DMCoarsenHookRemove(), DMCoarsenHookAddDestroy(), DMRefineHookAdd(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
 @*/
 PetscErrorCode DMCoarsenHookAdd(DM fine,PetscErrorCode (*coarsenhook)(DM,DM,void*),PetscErrorCode (*restricthook)(DM,Mat,Vec,Mat,DM,void*),void *ctx)
 {
@@ -2862,9 +2956,72 @@ PetscErrorCode DMCoarsenHookAdd(DM fine,PetscErrorCode (*coarsenhook)(DM,DM,void
   ierr               = PetscNew(&link);CHKERRQ(ierr);
   link->coarsenhook  = coarsenhook;
   link->restricthook = restricthook;
+  link->destroyhook  = NULL;
   link->ctx          = ctx;
   link->next         = NULL;
   *p                 = link;
+  PetscFunctionReturn(0);
+}
+
+/*@C
+   DMCoarsenHookAddDestroy - add a callback to be run when removing a hook added with DMCoarsenHookAdd
+
+   Logically Collective
+
+   Input Arguments:
++  fine - nonlinear solver context to which hook was attached
+.  coarsenhook - function to run when setting up a coarser level
+.  restricthook - function to run to update data on coarser levels (once per SNESSolve())
+.  ctx - [optional] user-defined context for provide data for the hooks (may be NULL)
+.  destroyhook - function to run when removing the hook (via DMCoarsenHookRemove)
+-  destroyctx - [optional] user-defined ctx to provide data to the destroyhook (may be NULL)
+
+   Calling sequence of destroyhook:
+$    destroyhook(DM fine,void *ctx);
+
++  fine - fine level DM
+-  ctx - optional user-defined function context
+
+   Level: advanced
+
+   Notes:
+   This function is only needed if the coarsenhook added by DMCoarsenHookAdd itself adds hooks to coarse grids which need to be cleaned up.
+
+   If this function is called multiple times, the destructors will be run in the order they are added.
+
+   If this function is called multiple times with the same (coarsenhook, restricthook, ctx) tuple, the last call will be used as the destroyhook.
+
+   This function is currently not available from Fortran.
+
+.seealso: DMCoarsenHookRemove(), DMCoarsenHookAdd(), DMRefineHookAdd(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
+@*/
+PetscErrorCode DMCoarsenHookAddDestroy(DM fine,PetscErrorCode (*coarsenhook)(DM,DM,void*),PetscErrorCode (*restricthook)(DM,Mat,Vec,Mat,DM,void*),void *ctx,PetscErrorCode (*destroyhook)(DM,void*),void *destroyctx)
+{
+  DMCoarsenHookLink *p;
+  PetscErrorCode     ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(fine,DM_CLASSID,1);
+  for (p=&fine->coarsenhook; *p; p=&(*p)->next) { /* Find the hook to add destructor to */
+    if ((*p)->coarsenhook == coarsenhook && (*p)->restricthook == restricthook && (*p)->ctx == ctx) {
+      DMDestroyHookLink link,*d;
+      PetscBool         add = PETSC_TRUE;
+      for (d=&(*p)->destroyhook; *d; d=&(*d)->next) {
+        if ((*d)->destroyhook == destroyhook && (*d)->ctx == destroyctx) {
+          add = PETSC_FALSE;
+          break;
+        }
+      }
+      if (add) {
+        ierr = PetscNew(&link);CHKERRQ(ierr);
+        link->destroyhook = destroyhook;
+        link->ctx         = destroyctx;
+        link->next        = NULL;
+        *d = link;
+      }
+      break;
+    }
+  }
   PetscFunctionReturn(0);
 }
 
@@ -2882,11 +3039,12 @@ PetscErrorCode DMCoarsenHookAdd(DM fine,PetscErrorCode (*coarsenhook)(DM,DM,void
    Level: advanced
 
    Notes:
-   This function does nothing if the hook is not in the list.
+   This function does nothing if the hook is not in the list. If the hook has a destructors registered via
+   DMCoarsenHookAddDestroy, they will be run here.
 
    This function is currently not available from Fortran.
 
-.seealso: DMCoarsenHookAdd(), DMRefineHookAdd(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
+.seealso: DMCoarsenHookAdd(), DMCoarsenHookAddDestroy(), DMRefineHookAdd(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
 @*/
 PetscErrorCode DMCoarsenHookRemove(DM fine,PetscErrorCode (*coarsenhook)(DM,DM,void*),PetscErrorCode (*restricthook)(DM,Mat,Vec,Mat,DM,void*),void *ctx)
 {
@@ -2899,6 +3057,15 @@ PetscErrorCode DMCoarsenHookRemove(DM fine,PetscErrorCode (*coarsenhook)(DM,DM,v
     if ((*p)->coarsenhook == coarsenhook && (*p)->restricthook == restricthook && (*p)->ctx == ctx) {
       link = *p;
       *p = link->next;
+      if (link->destroyhook) {
+        DMDestroyHookLink dlink,*d;
+        for (d=&link->destroyhook; *d; ) {
+          dlink = *d;
+          *d = dlink->next;
+          ierr = (*dlink->destroyhook)(fine,dlink->ctx);CHKERRQ(ierr);
+          ierr = PetscFree(dlink);CHKERRQ(ierr);
+        }
+      }
       ierr = PetscFree(link);CHKERRQ(ierr);
       break;
     }
@@ -2977,7 +3144,7 @@ $    restricthook(DM global,VecScatter out,VecScatter in,DM block,void *ctx)
 
    This function is currently not available from Fortran.
 
-.seealso: DMRefineHookAdd(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
+.seealso: DMSubDomainHookRemove(), DMSubDomainHookAddDestroy(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
 @*/
 PetscErrorCode DMSubDomainHookAdd(DM global,PetscErrorCode (*ddhook)(DM,DM,void*),PetscErrorCode (*restricthook)(DM,VecScatter,VecScatter,DM,void*),void *ctx)
 {
@@ -2992,9 +3159,70 @@ PetscErrorCode DMSubDomainHookAdd(DM global,PetscErrorCode (*ddhook)(DM,DM,void*
   ierr               = PetscNew(&link);CHKERRQ(ierr);
   link->restricthook = restricthook;
   link->ddhook       = ddhook;
+  link->destroyhook  = NULL;
   link->ctx          = ctx;
   link->next         = NULL;
   *p                 = link;
+  PetscFunctionReturn(0);
+}
+
+/*@C
+   DMSubDomainHookAddDestroy - add a callback to be run when destroying a hook added with DMSubDomainHookAdd
+
+   Logically Collective
+
+   Input Arguments:
++  global - global DM
+.  ddhook - function to run to pass data to the decomposition DM upon its creation
+.  restricthook - function to run to update data on block solve (at the beginning of the block solve)
+.  ctx - [optional] user-defined context for provide data for the hooks (may be NULL)
+.  destroyhook - function to run when hook is removed
+-  destroyctx - [optional] user-defined context for the destroyhook (may be NULL)
+
+   Calling sequence of destroyhook:
+$    destroyhook(DM global,void *ctx);
+
++  global - global DM
+-  ctx - optional user-defined context
+
+   Level: advanced
+
+   Notes:
+   This function is only needed if the ddhook added by DMSubDomainHookAdd itself adds hooks to subdomain grids which need to be cleaned up.
+
+   If this function is called multiple times, the destructors will be run in the order they are added.
+
+   This function is currently not available from Fortran.
+
+.seealso: DMSubDomainHookRemove(), DMSubDomainHookAdd(), DMRefineHookAdd(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
+@*/
+PetscErrorCode DMSubDomainHookAddDestroy(DM global,PetscErrorCode (*ddhook)(DM,DM,void*),PetscErrorCode (*restricthook)(DM,VecScatter,VecScatter,DM,void*),void *ctx,PetscErrorCode (*destroyhook)(DM,void*),void *destroyctx)
+{
+  DMSubDomainHookLink *p;
+  PetscErrorCode       ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(global,DM_CLASSID,1);
+  for (p=&global->subdomainhook; *p; p=&(*p)->next) { /* Find the hook to add a destructor to */
+    if ((*p)->ddhook == ddhook && (*p)->restricthook == restricthook && (*p)->ctx == ctx) {
+      DMDestroyHookLink link,*d;
+      PetscBool         add = PETSC_TRUE;
+      for (d=&(*p)->destroyhook; *d; d=&(*d)->next) {
+        if ((*d)->destroyhook == destroyhook && (*d)->ctx == destroyctx) {
+          add = PETSC_FALSE;
+          break;
+        }
+      }
+      if (add) {
+        ierr = PetscNew(&link);CHKERRQ(ierr);
+        link->destroyhook = destroyhook;
+        link->ctx         = destroyctx;
+        link->next        = NULL;
+        *d = link;
+      }
+      break;
+    }
+  }
   PetscFunctionReturn(0);
 }
 
@@ -3013,9 +3241,11 @@ PetscErrorCode DMSubDomainHookAdd(DM global,PetscErrorCode (*ddhook)(DM,DM,void*
 
    Notes:
 
+   If the hook has destructors registered via DMSubDomainHookAddDestroy, they will be run here.
+ 
    This function is currently not available from Fortran.
 
-.seealso: DMSubDomainHookAdd(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
+.seealso: DMSubDomainHookAdd(), DMSubDomainHookAddDestroy(), SNESFASGetInterpolation(), SNESFASGetInjection(), PetscObjectCompose(), PetscContainerCreate()
 @*/
 PetscErrorCode DMSubDomainHookRemove(DM global,PetscErrorCode (*ddhook)(DM,DM,void*),PetscErrorCode (*restricthook)(DM,VecScatter,VecScatter,DM,void*),void *ctx)
 {
@@ -3028,6 +3258,15 @@ PetscErrorCode DMSubDomainHookRemove(DM global,PetscErrorCode (*ddhook)(DM,DM,vo
     if ((*p)->ddhook == ddhook && (*p)->restricthook == restricthook && (*p)->ctx == ctx) {
       link = *p;
       *p = link->next;
+      if (link->destroyhook) {
+        DMDestroyHookLink dlink,*d;
+        for (d=&link->destroyhook; *d; ) {
+          dlink = *d;
+          *d = dlink->next;
+          ierr = (*dlink->destroyhook)(global,dlink->ctx);CHKERRQ(ierr);
+          ierr = PetscFree(dlink);CHKERRQ(ierr);
+        }
+      }
       ierr = PetscFree(link);CHKERRQ(ierr);
       break;
     }
@@ -3048,7 +3287,7 @@ PetscErrorCode DMSubDomainHookRemove(DM global,PetscErrorCode (*ddhook)(DM,DM,vo
 
    Level: developer
 
-.seealso: DMCoarsenHookAdd(), MatRestrict()
+.seealso: DMSubDomainHookAdd(), MatRestrict()
 @*/
 PetscErrorCode DMSubDomainRestrict(DM global,VecScatter oscatter,VecScatter gscatter,DM subdm)
 {

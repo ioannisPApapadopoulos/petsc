@@ -89,6 +89,10 @@
 
     Experienced users can set the error handler with PetscPushErrorHandler().
 
+   Fortran Notes:
+      SETERRQ() may be called from Fortran subroutines but SETERRA() must be called from the 
+      Fortran main program.
+
 .seealso: PetscTraceBackErrorHandler(), PetscPushErrorHandler(), PetscError(), CHKERRQ(), CHKMEMQ, SETERRQ1(), SETERRQ2(), SETERRQ3()
 M*/
 #define SETERRQ(comm,ierr,s) return PetscError(comm,__LINE__,PETSC_FUNCTION_NAME,__FILE__,ierr,PETSC_ERROR_INITIAL,s)
@@ -546,9 +550,6 @@ M*/
 
 #endif
 
-#define CHKERRCUDA(err)   do {if (PetscUnlikely(err)) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"CUDA error %d",err);} while(0)
-#define CHKERRCUBLAS(err) do {if (PetscUnlikely(err)) SETERRQ1(PETSC_COMM_SELF,PETSC_ERR_LIB,"CUBLAS error %d",err);} while(0)
-
 /*MC
    CHKMEMQ - Checks the memory for corruption, calls error handler if any is detected
 
@@ -727,8 +728,8 @@ PETSC_STATIC_INLINE PetscBool PetscStackActive(void)
     PetscStackSAWsTakeAccess();                                          \
     if (petscstack && petscstack->currentsize > 0) {                  \
       petscstack->currentsize--;                                       \
-      petscstack->function[petscstack->currentsize]  = 0;             \
-      petscstack->file[petscstack->currentsize]      = 0;             \
+      petscstack->function[petscstack->currentsize]  = NULL;             \
+      petscstack->file[petscstack->currentsize]      = NULL;             \
       petscstack->line[petscstack->currentsize]      = 0;             \
       petscstack->petscroutine[petscstack->currentsize] = PETSC_FALSE;\
     }                                                                   \

@@ -106,7 +106,7 @@ PetscErrorCode DMPlexGetFieldType_Internal(DM dm, PetscSection section, PetscInt
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
-  *ft  = PETSC_VTK_POINT_FIELD;
+  *ft  = PETSC_VTK_INVALID;
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
   ierr = DMPlexGetDepthStratum(dm, 0, &vStart, &vEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm, 0, &cStart, &cEnd);CHKERRQ(ierr);
@@ -131,7 +131,16 @@ PetscErrorCode DMPlexGetFieldType_Internal(DM dm, PetscSection section, PetscInt
     *sEnd   = cEnd;
     if (globalvcdof[1] == dim) *ft = PETSC_VTK_CELL_VECTOR_FIELD;
     else                       *ft = PETSC_VTK_CELL_FIELD;
-  } else SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Could not classify input Vec for VTK");
+  } else {
+    if (field >= 0) {
+      const char *fieldname;
+
+      ierr = PetscSectionGetFieldName(section, field, &fieldname);CHKERRQ(ierr);
+      ierr = PetscInfo2((PetscObject) dm, "Could not classify VTK output type of section field %D \"%s\"\n", field, fieldname);CHKERRQ(ierr);
+    } else {
+      ierr = PetscInfo((PetscObject) dm, "Could not classify VTK output typp of section\"%s\"\n");CHKERRQ(ierr);
+    }
+  }
   PetscFunctionReturn(0);
 }
 
@@ -281,6 +290,7 @@ static PetscErrorCode VecView_Plex_Local_VTK(Vec v, PetscViewer viewer)
   const char              *name;
   PetscSection            section;
   PetscInt                pStart, pEnd;
+  PetscInt                numFields;
   PetscViewerVTKFieldType ft;
   PetscErrorCode          ierr;
 
@@ -291,8 +301,21 @@ static PetscErrorCode VecView_Plex_Local_VTK(Vec v, PetscViewer viewer)
   ierr = PetscObjectSetName((PetscObject) locv, name);CHKERRQ(ierr);
   ierr = VecCopy(v, locv);CHKERRQ(ierr);
   ierr = DMGetLocalSection(dm, &section);CHKERRQ(ierr);
-  ierr = DMPlexGetFieldType_Internal(dm, section, PETSC_DETERMINE, &pStart, &pEnd, &ft);CHKERRQ(ierr);
-  ierr = PetscViewerVTKAddField(viewer, (PetscObject) dm, DMPlexVTKWriteAll, ft, PETSC_TRUE,(PetscObject) locv);CHKERRQ(ierr);
+  ierr = PetscSectionGetNumFields(section, &numFields);CHKERRQ(ierr);
+  if (!numFields) {
+    ierr = DMPlexGetFieldType_Internal(dm, section, PETSC_DETERMINE, &pStart, &pEnd, &ft);CHKERRQ(ierr);
+    ierr = PetscViewerVTKAddField(viewer, (PetscObject) dm, DMPlexVTKWriteAll, PETSC_DEFAULT, ft, PETSC_TRUE,(PetscObject) locv);CHKERRQ(ierr);
+  } else {
+    PetscInt f;
+
+    for (f = 0; f < numFields; f++) {
+      ierr = DMPlexGetFieldType_Internal(dm, section, f, &pStart, &pEnd, &ft);CHKERRQ(ierr);
+      if (ft == PETSC_VTK_INVALID) continue;
+      ierr = PetscObjectReference((PetscObject)locv);CHKERRQ(ierr);
+      ierr = PetscViewerVTKAddField(viewer, (PetscObject) dm, DMPlexVTKWriteAll, f, ft, PETSC_TRUE,(PetscObject) locv);CHKERRQ(ierr);
+    }
+    ierr = VecDestroy(&locv);CHKERRQ(ierr);
+  }
   PetscFunctionReturn(0);
 }
 
@@ -3907,7 +3930,7 @@ static PetscErrorCode PetscSectionFieldGetTensorDegree_Private(PetscSection sect
 
   Level: developer
 
-.seealso: DMGetLocalSection(), PetscSectionSetClosurePermutation(), DMSetGlocalSection()
+.seealso: DMGetLocalSection(), PetscSectionSetClosurePermutation(), DMSetGlobalSection()
 @*/
 PetscErrorCode DMPlexSetClosurePermutationTensor(DM dm, PetscInt point, PetscSection section)
 {
@@ -7063,24 +7086,44 @@ PetscErrorCode DMPlexCheckSkeleton(DM dm, PetscInt cellHeight)
 /*@
   DMPlexCheckFaces - Check that the faces of each cell give a vertex order this is consistent with what we expect from the cell type
 
+  Not Collective
+
   Input Parameters:
 + dm - The DMPlex object
 - cellHeight - Normally 0
 
-  Note: This is a useful diagnostic when creating meshes programmatically.
+  Note: This routine is only relevant for meshes that are fully interpolated across all ranks, and will error out if a non-interpolated mesh is
+  given. This is a useful diagnostic when creating meshes programmatically.
+
+  Options Database Keys:
+. -dm_plex_force_check_faces <bool>	: Force DMPlexCheckFaces() to run even on uninterpolated meshes
 
   Level: developer
 
-.seealso: DMCreate(), DMPlexCheckSymmetry(), DMPlexCheckSkeleton()
+.seealso: DMCreate(), DMPlexGetVTKCellHeight(), DMPlexCheckSymmetry(), DMPlexCheckSkeleton(), DMPlexInterpolate(), DMPlexIsInterpolated()
 @*/
 PetscErrorCode DMPlexCheckFaces(DM dm, PetscInt cellHeight)
 {
   PetscInt       pMax[4];
   PetscInt       dim, depth, vStart, vEnd, cStart, cEnd, c, h;
   PetscErrorCode ierr;
+  DMPlexInterpolatedFlag interpEnum;
+  PetscBool	 override = PETSC_FALSE, oset = PETSC_FALSE;
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm, DM_CLASSID, 1);
+
+  ierr = DMPlexIsInterpolated(dm, &interpEnum);CHKERRQ(ierr);
+  ierr = PetscOptionsGetBool(NULL, NULL, "-dm_plex_force_check_faces", &override, &oset);CHKERRQ(ierr);
+  if (interpEnum != DMPLEX_INTERPOLATED_FULL && !(override && oset)) {
+    PetscMPIInt	rank;
+    MPI_Comm	comm;
+
+    ierr = PetscObjectGetComm((PetscObject) dm, &comm);CHKERRQ(ierr);
+    ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
+    SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_SUP, "Mesh is not fully interpolated on rank %d!", rank);
+  }
+
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
   ierr = DMPlexGetDepth(dm, &depth);CHKERRQ(ierr);
   ierr = DMPlexGetDepthStratum(dm, 0, &vStart, &vEnd);CHKERRQ(ierr);
@@ -7163,26 +7206,6 @@ PetscErrorCode DMPlexCheckGeometry(DM dm)
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode DMPlexAreAllConePointsInArray_Private(DM dm, PetscInt p, PetscInt npoints, const PetscInt *points, PetscInt *missingPoint)
-{
-  PetscInt i,l,n;
-  const PetscInt *cone;
-  PetscErrorCode ierr;
-
-  PetscFunctionBegin;
-  *missingPoint = -1;
-  ierr = DMPlexGetConeSize(dm, p, &n);CHKERRQ(ierr);
-  ierr = DMPlexGetCone(dm, p, &cone);CHKERRQ(ierr);
-  for (i=0; i<n; i++) {
-    ierr = PetscFindInt(cone[i], npoints, points, &l);CHKERRQ(ierr);
-    if (l < 0) {
-      *missingPoint = cone[i];
-      break;
-    }
-  }
-  PetscFunctionReturn(0);
-}
-
 /*@
   DMPlexCheckPointSF - Check that several necessary conditions are met for the point SF of this plex.
 
@@ -7199,35 +7222,51 @@ static PetscErrorCode DMPlexAreAllConePointsInArray_Private(DM dm, PetscInt p, P
 @*/
 PetscErrorCode DMPlexCheckPointSF(DM dm)
 {
-  PetscSF         sf;
-  PetscInt        d,depth,i,nleaves,p,plo,phi,missingPoint;
-  const PetscInt *locals;
+  PetscSF         pointSF;
+  PetscInt        cellHeight, cStart, cEnd, l, nleaves, nroots, overlap;
+  const PetscInt *locals, *rootdegree;
+  PetscBool       distributed;
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
   PetscValidHeaderSpecific(dm, DM_CLASSID, 1);
-  ierr = DMPlexGetDepth(dm, &depth);CHKERRQ(ierr);
-  ierr = DMGetPointSF(dm, &sf);CHKERRQ(ierr);
-  ierr = DMPlexGetOverlap(dm, &d);CHKERRQ(ierr);
-  if (d) {
+  ierr = DMGetPointSF(dm, &pointSF);CHKERRQ(ierr);
+  ierr = DMPlexIsDistributed(dm, &distributed);CHKERRQ(ierr);
+  if (!distributed) PetscFunctionReturn(0);
+  ierr = DMPlexGetOverlap(dm, &overlap);CHKERRQ(ierr);
+  if (overlap) {
     ierr = PetscPrintf(PetscObjectComm((PetscObject)dm), "Warning: DMPlexCheckPointSF() is currently not implemented for meshes with partition overlapping");
     PetscFunctionReturn(0);
   }
-  ierr = PetscSFGetGraph(sf, NULL, &nleaves, &locals, NULL);CHKERRQ(ierr);
+  if (!pointSF) SETERRQ(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONGSTATE, "This DMPlex is distributed but does not have PointSF attached");
+  ierr = PetscSFGetGraph(pointSF, &nroots, &nleaves, &locals, NULL);CHKERRQ(ierr);
+  if (nroots < 0) SETERRQ(PetscObjectComm((PetscObject)dm), PETSC_ERR_ARG_WRONGSTATE, "This DMPlex is distributed but its PointSF has no graph set");
+  ierr = PetscSFComputeDegreeBegin(pointSF, &rootdegree);CHKERRQ(ierr);
+  ierr = PetscSFComputeDegreeEnd(pointSF, &rootdegree);CHKERRQ(ierr);
 
   /* 1) check there are no faces in 2D, cells in 3D, in interface */
-  ierr = DMPlexGetVTKCellHeight(dm, &d);CHKERRQ(ierr);
-  ierr = DMPlexGetHeightStratum(dm, d, &plo, &phi);CHKERRQ(ierr);
-  for (i=0; i<nleaves; i++) {
-    p = locals[i];
-    if (p >= plo && p < phi) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_PLIB, "point SF contains %d which is a cell",p);
+  ierr = DMPlexGetVTKCellHeight(dm, &cellHeight);CHKERRQ(ierr);
+  ierr = DMPlexGetHeightStratum(dm, cellHeight, &cStart, &cEnd);CHKERRQ(ierr);
+  for (l = 0; l < nleaves; ++l) {
+    const PetscInt point = locals[l];
+
+    if (point >= cStart && point < cEnd) SETERRQ1(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Point SF contains %D which is a cell", point);
   }
 
-  /* 2) if some point is in interface, then all its cone points must be also in interface  */
-  for (i=0; i<nleaves; i++) {
-    p = locals[i];
-    ierr = DMPlexAreAllConePointsInArray_Private(dm, p, nleaves, locals, &missingPoint);CHKERRQ(ierr);
-    if (missingPoint >= 0) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_PLIB, "point SF contains %d but not %d from its cone",p,missingPoint);
+  /* 2) if some point is in interface, then all its cone points must be also in interface (either as leaves or roots) */
+  for (l = 0; l < nleaves; ++l) {
+    const PetscInt  point = locals[l];
+    const PetscInt *cone;
+    PetscInt        coneSize, c, idx;
+
+    ierr = DMPlexGetConeSize(dm, point, &coneSize);CHKERRQ(ierr);
+    ierr = DMPlexGetCone(dm, point, &cone);CHKERRQ(ierr);
+    for (c = 0; c < coneSize; ++c) {
+      if (!rootdegree[cone[c]]) {
+        ierr = PetscFindInt(cone[c], nleaves, locals, &idx);CHKERRQ(ierr);
+        if (idx < 0) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Point SF contains %D but not %D from its cone", point, cone[c]);
+      }
+    }
   }
   PetscFunctionReturn(0);
 }

@@ -2,6 +2,7 @@ from __future__ import generators
 import config.base
 
 import os
+import re
 
 try:
   from hashlib import md5 as new_md5
@@ -89,7 +90,7 @@ class Package(config.base.Configure):
 
     self.isMPI                  = 0 # Is an MPI implementation, needed to check for compiler wrappers
     self.hastests               = 0 # indicates that PETSc make alltests has tests for this package
-    self.hastestsdatafiles      = 0 # indicates that PETSc make all tests has tests for this package that require DATAFILESPATH to be set
+    self.hastestsdatafiles      = 0 # indicates that PETSc make alltests has tests for this package that require DATAFILESPATH to be set
     self.makerulename           = '' # some packages do too many things with the make stage; this allows a package to limit to, for example, just building the libraries
     self.installedpetsc         = 0
     self.installwithbatch       = 1  # install the package even though configure in the batch mode; f2blaslapack and fblaslapack for example
@@ -676,8 +677,11 @@ If its a remote branch, use: origin/'+self.gitcommit+' for commit.')
         try:
           config.base.Configure.executeShellCommand([self.sourceControl.git, '-c', 'user.name=petsc-configure', '-c', 'user.email=petsc@configure', 'stash'], cwd=self.packageDir, log = self.log)
           config.base.Configure.executeShellCommand([self.sourceControl.git, 'clean', '-f', '-d', '-x'], cwd=self.packageDir, log = self.log)
-        except:
-          raise RuntimeError('Unable to run git stash/clean in repository: '+self.packageDir+'.\nPerhaps its a git error!')
+        except RuntimeError as e:
+          if str(e).find("Unknown option: -c") >= 0:
+            self.logPrintBox('***** WARNING: Unable to "git stash". Likely due to antique git version (<1.8). Proceeding without stashing!')
+          else:
+            raise RuntimeError('Unable to run git stash/clean in repository: '+self.packageDir+'.\nPerhaps its a git error!')
         try:
           config.base.Configure.executeShellCommand([self.sourceControl.git, 'checkout', '-f', gitcommit_hash], cwd=self.packageDir, log = self.log)
         except:
@@ -793,12 +797,13 @@ If its a remote branch, use: origin/'+self.gitcommit+' for commit.')
     return ret
 
   def checkPackageLink(self, includes, body, cleanup = 1, codeBegin = None, codeEnd = None, shared = 0):
-    oldFlags = self.compilers.CPPFLAGS
+    flagsArg = self.getPreprocessorFlagsArg()
+    oldFlags = getattr(self.compilers, flagsArg)
     oldLibs  = self.compilers.LIBS
-    self.compilers.CPPFLAGS += ' '+self.headers.toString(self.include)
+    setattr(self.compilers, flagsArg, oldFlags+' '+self.headers.toString(self.include))
     self.compilers.LIBS = self.libraries.toString(self.lib)+' '+self.compilers.LIBS
     result = self.checkLink(includes, body, cleanup, codeBegin, codeEnd, shared)
-    self.compilers.CPPFLAGS = oldFlags
+    setattr(self.compilers, flagsArg,oldFlags)
     self.compilers.LIBS = oldLibs
     return result
 
@@ -990,29 +995,32 @@ If its a remote branch, use: origin/'+self.gitcommit+' for commit.')
     if not self.versioninclude:
       if not self.includes: return
       self.versioninclude = self.includes[0]
-    oldFlags = self.compilers.CPPFLAGS
-    self.compilers.CPPFLAGS += ' '+self.headers.toString(self.include)
     if self.cxx:
       self.pushLanguage('C++')
     else:
       self.pushLanguage(self.defaultLanguage)
+    flagsArg = self.getPreprocessorFlagsArg()
+    oldFlags = getattr(self.compilers, flagsArg)
+    setattr(self.compilers, flagsArg, oldFlags+' '+self.headers.toString(self.include))
     try:
-      output = self.outputPreprocess('#include "'+self.versioninclude+'"\nversion='+self.versionname+'\n')
+      output = self.outputPreprocess('#include "'+self.versioninclude+'"\n;petscpkgver('+self.versionname+');\n')
     except:
       self.log.write('For '+self.package+' unable to run preprocessor to obtain version information, skipping version check\n')
       self.popLanguage()
-      self.compilers.CPPFLAGS = oldFlags
+      setattr(self.compilers, flagsArg,oldFlags)
       return
     self.popLanguage()
-    self.compilers.CPPFLAGS = oldFlags
-    loutput = output.split('\n')
+    setattr(self.compilers, flagsArg,oldFlags)
+    #strip #lines
+    output = re.sub('#.*\n','\n',output)
+    #strip newlines,spaces,quotes
+    output = re.sub('[\n "]*','',output)
+    #now split over ';'
+    loutput = output.split(';')
     version = ''
     for i in loutput:
-      if i.startswith('version='):
-        version = i[8:]
-        break
-      if i.startswith('version ='):
-        version = i[9:]
+      if i.find('petscpkgver') >=0:
+        version = i.split('(')[1].split(')')[0]
         break
     if not version:
       self.log.write('For '+self.package+' unable to find version information: output below, skipping version check\n')
@@ -1020,7 +1028,6 @@ If its a remote branch, use: origin/'+self.gitcommit+' for commit.')
       if self.requiresversion:
         raise RuntimeError('Configure must be able to determined the version information for '+self.name+'. It was unable to, please send configure.log to petsc-maint@mcs.anl.gov')
       return
-    version = version.replace(' ','').replace('\"','')
     try:
       self.foundversion = self.versionToStandardForm(version)
       self.version_tuple = self.versionToTuple(self.foundversion)

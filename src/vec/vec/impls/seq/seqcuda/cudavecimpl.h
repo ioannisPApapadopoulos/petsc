@@ -7,15 +7,12 @@
 
 #include <cublas_v2.h>
 
-#define WaitForGPU() PetscCUDASynchronize ? cudaDeviceSynchronize() : 0
-
 typedef struct {
   PetscScalar  *GPUarray;           /* this always holds the GPU data */
   PetscScalar  *GPUarray_allocated; /* if the array was allocated by PETSc this is its pointer */
   cudaStream_t stream;              /* A stream for doing asynchronous data transfers */
   PetscBool    hostDataRegisteredAsPageLocked;
 } Vec_CUDA;
-
 
 #include <cuda_runtime.h>
 

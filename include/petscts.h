@@ -5,6 +5,7 @@
 #if !defined(PETSCTS_H)
 #define PETSCTS_H
 #include <petscsnes.h>
+#include <petscconvest.h>
 
 /*S
      TS - Abstract PETSc object that manages all time-steppers (ODE integrators)
@@ -593,8 +594,8 @@ PETSC_EXTERN PetscErrorCode TSGetKSP(TS,KSP*);
 
 PETSC_EXTERN PetscErrorCode TSView(TS,PetscViewer);
 PETSC_EXTERN PetscErrorCode TSLoad(TS,PetscViewer);
-PETSC_STATIC_INLINE PetscErrorCode TSViewFromOptions(TS A,PetscObject obj,const char name[]) {return PetscObjectViewFromOptions((PetscObject)A,obj,name);}
-PETSC_STATIC_INLINE PetscErrorCode TSTrajectoryViewFromOptions(TSTrajectory A,PetscObject obj,const char name[]) {return PetscObjectViewFromOptions((PetscObject)A,obj,name);}
+PETSC_EXTERN PetscErrorCode TSViewFromOptions(TS,PetscObject,const char[]);
+PETSC_EXTERN PetscErrorCode TSTrajectoryViewFromOptions(TSTrajectory,PetscObject,const char[]);
 
 #define TS_FILE_CLASSID 1211225
 
@@ -1004,4 +1005,12 @@ PETSC_EXTERN PetscErrorCode SNESTSFormJacobian(SNES,Vec,Mat,Mat,void*);
 
 PETSC_EXTERN PetscErrorCode TSRHSJacobianTest(TS,PetscBool*);
 PETSC_EXTERN PetscErrorCode TSRHSJacobianTestTranspose(TS,PetscBool*);
+
+PETSC_EXTERN PetscErrorCode TSGetComputeInitialCondition(TS, PetscErrorCode (**)(TS, Vec));
+PETSC_EXTERN PetscErrorCode TSSetComputeInitialCondition(TS, PetscErrorCode (*)(TS, Vec));
+PETSC_EXTERN PetscErrorCode TSComputeInitialCondition(TS, Vec);
+PETSC_EXTERN PetscErrorCode TSGetComputeExactError(TS, PetscErrorCode (**)(TS, Vec, Vec));
+PETSC_EXTERN PetscErrorCode TSSetComputeExactError(TS, PetscErrorCode (*)(TS, Vec, Vec));
+PETSC_EXTERN PetscErrorCode TSComputeExactError(TS, Vec, Vec);
+PETSC_EXTERN PetscErrorCode PetscConvEstUseTS(PetscConvEst);
 #endif

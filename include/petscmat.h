@@ -205,7 +205,7 @@ PETSC_EXTERN PetscErrorCode MatCreate(MPI_Comm,Mat*);
 PETSC_EXTERN PetscErrorCode MatSetSizes(Mat,PetscInt,PetscInt,PetscInt,PetscInt);
 PETSC_EXTERN PetscErrorCode MatSetType(Mat,MatType);
 PETSC_EXTERN PetscErrorCode MatSetFromOptions(Mat);
-PETSC_STATIC_INLINE PetscErrorCode MatViewFromOptions(Mat A,PetscObject obj,const char name[]) {return PetscObjectViewFromOptions((PetscObject)A,obj,name);}
+PETSC_EXTERN PetscErrorCode MatViewFromOptions(Mat,PetscObject,const char[]);
 PETSC_EXTERN PetscErrorCode MatRegister(const char[],PetscErrorCode(*)(Mat));
 PETSC_EXTERN PetscErrorCode MatRegisterRootName(const char[],const char[],const char[]);
 PETSC_EXTERN PetscErrorCode MatSetOptionsPrefix(Mat,const char[]);
@@ -428,6 +428,8 @@ PETSC_EXTERN PetscErrorCode MatSeqAIJSetValuesLocalFast(Mat,PetscInt,const Petsc
 PETSC_EXTERN PetscErrorCode MatSeqAIJSetType(Mat,MatType);
 PETSC_EXTERN PetscErrorCode MatSeqAIJRegister(const char[],PetscErrorCode (*)(Mat,MatType,MatReuse,Mat *));
 PETSC_EXTERN PetscFunctionList MatSeqAIJList;
+PETSC_EXTERN PetscErrorCode MatSeqBAIJGetArray(Mat,PetscScalar *[]);
+PETSC_EXTERN PetscErrorCode MatSeqBAIJRestoreArray(Mat,PetscScalar *[]);
 PETSC_EXTERN PetscErrorCode MatSeqSBAIJGetArray(Mat,PetscScalar *[]);
 PETSC_EXTERN PetscErrorCode MatSeqSBAIJRestoreArray(Mat,PetscScalar *[]);
 PETSC_EXTERN PetscErrorCode MatDenseGetArray(Mat,PetscScalar *[]);
@@ -1360,7 +1362,7 @@ PETSC_EXTERN PetscErrorCode MatPartitioningRegister(const char[],PetscErrorCode 
 
 
 PETSC_EXTERN PetscErrorCode MatPartitioningView(MatPartitioning,PetscViewer);
-PETSC_STATIC_INLINE PetscErrorCode MatPartitioningViewFromOptions(MatPartitioning A,PetscObject B,const char name[]) {return PetscObjectViewFromOptions((PetscObject)A,B,name);}
+PETSC_EXTERN PetscErrorCode MatPartitioningViewFromOptions(MatPartitioning,PetscObject,const char[]);
 
 PETSC_EXTERN PetscErrorCode MatPartitioningSetFromOptions(MatPartitioning);
 PETSC_EXTERN PetscErrorCode MatPartitioningGetType(MatPartitioning,MatPartitioningType*);
@@ -1582,6 +1584,7 @@ PETSC_EXTERN PetscErrorCode MatFreeIntermediateDataStructures(Mat);
 PETSC_EXTERN PetscErrorCode MatShellSetOperation(Mat,MatOperation,void(*)(void));
 PETSC_EXTERN PetscErrorCode MatShellGetOperation(Mat,MatOperation,void(**)(void));
 PETSC_EXTERN PetscErrorCode MatShellSetContext(Mat,void*);
+PETSC_EXTERN PetscErrorCode MatShellSetVecType(Mat,VecType);
 PETSC_EXTERN PetscErrorCode MatShellTestMult(Mat,PetscErrorCode (*)(void*,Vec,Vec),Vec,void*,PetscBool*);
 PETSC_EXTERN PetscErrorCode MatShellTestMultTranspose(Mat,PetscErrorCode (*)(void*,Vec,Vec),Vec,void*,PetscBool*);
 PETSC_EXTERN PetscErrorCode MatShellSetManageScalingShifts(Mat);

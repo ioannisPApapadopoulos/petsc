@@ -158,7 +158,7 @@ PETSC_INTERN PetscErrorCode MatPartitioningSizesToSep_Private(PetscInt p, PetscI
   }
   /* I know there should be a formula */
   ierr = PetscSortIntWithArrayPair(p-1,seps+p,sizes+p,level);CHKERRQ(ierr);
-  for (i=2*p-2;i>=0;i--) { seps[2*i] = seps[i]; seps[2*i+1] = seps[i] + sizes[i] - 1; }
+  for (i=2*p-2;i>=0;i--) { seps[2*i] = seps[i]; seps[2*i+1] = seps[i] + PetscMax(sizes[i] - 1,0); }
   PetscFunctionReturn(0);
 }
 
@@ -599,6 +599,29 @@ PetscErrorCode  MatPartitioningCreate(MPI_Comm comm,MatPartitioning *newp)
   part->n = (PetscInt)size;
 
   *newp = part;
+  PetscFunctionReturn(0);
+}
+
+/*@C
+   MatPartitioningViewFromOptions - View from Options
+
+   Collective on MatPartitioning
+
+   Input Parameters:
++  A - the partitioning context
+-  obj - Optional object
+.  name - command line option
+
+   Level: intermediate
+.seealso:  MatPartitioning, MatPartitioningView, PetscObjectViewFromOptions(), MatPartitioningCreate()
+@*/
+PetscErrorCode  MatPartitioningViewFromOptions(MatPartitioning A,PetscObject obj,const char name[])
+{
+  PetscErrorCode ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(A,MAT_PARTITIONING_CLASSID,1);
+  ierr = PetscObjectViewFromOptions((PetscObject)A,obj,name);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 

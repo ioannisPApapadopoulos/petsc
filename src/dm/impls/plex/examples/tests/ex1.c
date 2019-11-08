@@ -401,15 +401,15 @@ PetscErrorCode CreateMesh(MPI_Comm comm, AppCtx *user, DM *dm)
   ierr = PetscObjectSetName((PetscObject) *dm, "Simplicial Mesh");CHKERRQ(ierr);
   ierr = DMViewFromOptions(*dm, NULL, "-dm_view");CHKERRQ(ierr);
   if (user->final_diagnostics) {
-    PetscBool interpolated = PETSC_TRUE;
+    DMPlexInterpolatedFlag interpolated;
     PetscInt  dim, depth;
 
     ierr = DMGetDimension(*dm, &dim);CHKERRQ(ierr);
     ierr = DMPlexGetDepth(*dm, &depth);CHKERRQ(ierr);
-    if (depth >= 0 && dim != depth) interpolated = PETSC_FALSE;
+    ierr = DMPlexIsInterpolatedCollective(*dm, &interpolated);CHKERRQ(ierr);
 
     ierr = DMPlexCheckSymmetry(*dm);CHKERRQ(ierr);
-    if (interpolated) {
+    if (interpolated == DMPLEX_INTERPOLATED_FULL) {
       ierr = DMPlexCheckFaces(*dm, 0);CHKERRQ(ierr);
     }
     ierr = DMPlexCheckSkeleton(*dm, 0);CHKERRQ(ierr);
@@ -738,7 +738,7 @@ int main(int argc, char **argv)
   test:
     suffix: fluent_3
     requires: !complex
-    TODO: broken
+    TODO: Fails on non-linux: fseek(), fileno() ? https://gitlab.com/petsc/petsc/merge_requests/2206#note_238166382
     args: -filename ${wPETSC_DIR}/share/petsc/datafiles/meshes/cube_5tets.cas -interpolate 1 -dm_view -final_diagnostics 0
 
   # Med mesh reader tests, including parallel file reads
@@ -790,7 +790,7 @@ int main(int argc, char **argv)
 
   test:
     suffix: cylinder_wedge
-    args: -dim 3 -cell_simplex 0 -interpolate 0 -cell_wedge -domain_shape cylinder -dm_view vtk: -dm_plex_check_symmetry -dm_plex_check_faces -dm_plex_check_skeleton
+    args: -dim 3 -cell_simplex 0 -interpolate 0 -cell_wedge -domain_shape cylinder -dm_view vtk: -dm_plex_check_symmetry -dm_plex_check_faces -dm_plex_check_skeleton -dm_plex_force_check_faces
 
   test:
     suffix: cylinder_wedge_int

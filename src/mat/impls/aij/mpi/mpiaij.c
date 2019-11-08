@@ -593,10 +593,10 @@ PetscErrorCode MatSetValues_MPIAIJ(Mat mat,PetscInt m,const PetscInt im[],PetscI
 
       for (j=0; j<n; j++) {
         if (v)  value = roworiented ? v[i*n+j] : v[i+j*m];
+        if (ignorezeroentries && value == 0.0 && (addv == ADD_VALUES) && im[i] != in[j]) continue;
         if (in[j] >= cstart && in[j] < cend) {
           col   = in[j] - cstart;
           nonew = a->nonew;
-          if (ignorezeroentries && value == 0.0 && (addv == ADD_VALUES) && row != col) continue;
           MatSetValues_SeqAIJ_A_Private(row,col,value,addv,im[i],in[j]);
         } else if (in[j] < 0) continue;
 #if defined(PETSC_USE_DEBUG)
@@ -972,8 +972,9 @@ PetscErrorCode MatZeroRowsColumns_MPIAIJ(Mat A,PetscInt N,const PetscInt rows[],
   Mat_MPIAIJ        *l = (Mat_MPIAIJ*)A->data;
   PetscErrorCode    ierr;
   PetscMPIInt       n = A->rmap->n;
-  PetscInt          i,j,r,m,p = 0,len = 0;
+  PetscInt          i,j,r,m,len = 0;
   PetscInt          *lrows,*owners = A->rmap->range;
+  PetscMPIInt       p = 0;
   PetscSFNode       *rrows;
   PetscSF           sf;
   const PetscScalar *xx;
@@ -1271,6 +1272,7 @@ PetscErrorCode MatDestroy_MPIAIJ(Mat mat)
   ierr = PetscObjectComposeFunction((PetscObject)mat,"MatResetPreallocation_C",NULL);CHKERRQ(ierr);
   ierr = PetscObjectComposeFunction((PetscObject)mat,"MatMPIAIJSetPreallocationCSR_C",NULL);CHKERRQ(ierr);
   ierr = PetscObjectComposeFunction((PetscObject)mat,"MatDiagonalScaleLocal_C",NULL);CHKERRQ(ierr);
+  ierr = PetscObjectComposeFunction((PetscObject)mat,"MatConvert_mpiaij_mpibaij_C",NULL);CHKERRQ(ierr);
   ierr = PetscObjectComposeFunction((PetscObject)mat,"MatConvert_mpiaij_mpisbaij_C",NULL);CHKERRQ(ierr);
 #if defined(PETSC_HAVE_ELEMENTAL)
   ierr = PetscObjectComposeFunction((PetscObject)mat,"MatConvert_mpiaij_elemental_C",NULL);CHKERRQ(ierr);
@@ -1714,16 +1716,19 @@ PetscErrorCode MatPermute_MPIAIJ(Mat A,IS rowp,IS colp,Mat *B)
   ierr = MatGetRowIJ(aA,0,PETSC_FALSE,PETSC_FALSE,&anz,&ai,&aj,&done);CHKERRQ(ierr);
   ierr = MatGetRowIJ(aB,0,PETSC_FALSE,PETSC_FALSE,&bnz,&bi,&bj,&done);CHKERRQ(ierr);
   for (i=0; i<m; i++) {
-    PetscInt row = rdest[i],rowner;
+    PetscInt    row = rdest[i];
+    PetscMPIInt rowner;
     ierr = PetscLayoutFindOwner(A->rmap,row,&rowner);CHKERRQ(ierr);
     for (j=ai[i]; j<ai[i+1]; j++) {
-      PetscInt cowner,col = cdest[aj[j]];
+      PetscInt    col = cdest[aj[j]];
+      PetscMPIInt cowner;
       ierr = PetscLayoutFindOwner(A->cmap,col,&cowner);CHKERRQ(ierr); /* Could build an index for the columns to eliminate this search */
       if (rowner == cowner) dnnz[i]++;
       else onnz[i]++;
     }
     for (j=bi[i]; j<bi[i+1]; j++) {
-      PetscInt cowner,col = gcdest[bj[j]];
+      PetscInt    col = gcdest[bj[j]];
+      PetscMPIInt cowner;
       ierr = PetscLayoutFindOwner(A->cmap,col,&cowner);CHKERRQ(ierr);
       if (rowner == cowner) dnnz[i]++;
       else onnz[i]++;
@@ -3183,7 +3188,7 @@ PetscErrorCode ISGetSeqIS_Private(Mat mat,IS iscol,IS *isseq)
   if (gisstride) {
     PetscInt N;
     ierr = MatGetSize(mat,NULL,&N);CHKERRQ(ierr);
-    ierr = ISCreateStride(PetscObjectComm((PetscObject)mat),N,0,1,&iscol_local);CHKERRQ(ierr);
+    ierr = ISCreateStride(PETSC_COMM_SELF,N,0,1,&iscol_local);CHKERRQ(ierr);
     ierr = ISSetIdentity(iscol_local);CHKERRQ(ierr);
     ierr = PetscInfo(mat,"Optimizing for obtaining all columns of the matrix; skipping ISAllGather()\n");CHKERRQ(ierr);
   } else {
@@ -5307,7 +5312,8 @@ PetscErrorCode MatCreateSeqSubMatrixWithRows_Private(Mat P,IS rows,Mat *P_oth)
 {
   Mat_MPIAIJ               *p=(Mat_MPIAIJ*)P->data;
   Mat_SeqAIJ               *pd=(Mat_SeqAIJ*)(p->A)->data,*po=(Mat_SeqAIJ*)(p->B)->data,*p_oth;
-  PetscInt                 plocalsize,nrows,*ilocal,*oilocal,i,owner,lidx,*nrcols,*nlcols,ncol;
+  PetscInt                 plocalsize,nrows,*ilocal,*oilocal,i,lidx,*nrcols,*nlcols,ncol;
+  PetscMPIInt              owner;
   PetscSFNode              *iremote,*oiremote;
   const PetscInt           *lrowindices;
   PetscErrorCode           ierr;
@@ -5898,6 +5904,7 @@ PETSC_INTERN PetscErrorCode MatConvert_MPIAIJ_MPIAIJSELL(Mat,MatType,MatReuse,Ma
 #if defined(PETSC_HAVE_MKL_SPARSE)
 PETSC_INTERN PetscErrorCode MatConvert_MPIAIJ_MPIAIJMKL(Mat,MatType,MatReuse,Mat*);
 #endif
+PETSC_INTERN PetscErrorCode MatConvert_MPIAIJ_MPIBAIJ(Mat,MatType,MatReuse,Mat*);
 PETSC_INTERN PetscErrorCode MatConvert_MPIAIJ_MPISBAIJ(Mat,MatType,MatReuse,Mat*);
 #if defined(PETSC_HAVE_ELEMENTAL)
 PETSC_INTERN PetscErrorCode MatConvert_MPIAIJ_Elemental(Mat,MatType,MatReuse,Mat*);
@@ -6045,6 +6052,7 @@ PETSC_EXTERN PetscErrorCode MatCreate_MPIAIJ(Mat B)
   ierr = PetscObjectComposeFunction((PetscObject)B,"MatConvert_mpiaij_mpiaijmkl_C",MatConvert_MPIAIJ_MPIAIJMKL);CHKERRQ(ierr);
 #endif
   ierr = PetscObjectComposeFunction((PetscObject)B,"MatConvert_mpiaij_mpiaijcrl_C",MatConvert_MPIAIJ_MPIAIJCRL);CHKERRQ(ierr);
+  ierr = PetscObjectComposeFunction((PetscObject)B,"MatConvert_mpiaij_mpibaij_C",MatConvert_MPIAIJ_MPIBAIJ);CHKERRQ(ierr);
   ierr = PetscObjectComposeFunction((PetscObject)B,"MatConvert_mpiaij_mpisbaij_C",MatConvert_MPIAIJ_MPISBAIJ);CHKERRQ(ierr);
 #if defined(PETSC_HAVE_ELEMENTAL)
   ierr = PetscObjectComposeFunction((PetscObject)B,"MatConvert_mpiaij_elemental_C",MatConvert_MPIAIJ_Elemental);CHKERRQ(ierr);
@@ -6228,9 +6236,9 @@ PETSC_EXTERN void PETSC_STDCALL matsetvaluesmpiaij_(Mat *mmat,PetscInt *mm,const
         for (j=0; j<n; j++) {
           if (roworiented) value = v[i*n+j];
           else value = v[i+j*m];
+          if (ignorezeroentries && value == 0.0 && (addv == ADD_VALUES) && im[i] != in[j]) continue;
           if (in[j] >= cstart && in[j] < cend) {
             col = in[j] - cstart;
-            if (ignorezeroentries && value == 0.0 && (addv == ADD_VALUES) && row != col) continue;
             MatSetValues_SeqAIJ_A_Private(row,col,value,addv,im[i],in[j]);
           } else if (in[j] < 0) continue;
 #if defined(PETSC_USE_DEBUG)
@@ -6248,7 +6256,6 @@ PETSC_EXTERN void PETSC_STDCALL matsetvaluesmpiaij_(Mat *mmat,PetscInt *mm,const
 #else
               col = aij->colmap[in[j]] - 1;
 #endif
-              if (ignorezeroentries && value == 0.0 && (addv == ADD_VALUES) && row != col) continue;
               if (col < 0 && !((Mat_SeqAIJ*)(aij->A->data))->nonew) {
                 ierr = MatDisAssemble_MPIAIJ(mat);CHKERRQ(ierr);
                 col  =  in[j];
