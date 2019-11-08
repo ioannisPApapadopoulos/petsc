@@ -668,12 +668,37 @@ static PetscErrorCode DMRestrictHook_SNESVecSol(DM dmfine,Mat Restrict,Vec Rscal
   PetscFunctionReturn(0);
 }
 
+struct DestroyCtx {
+  DM    dm;
+  SNES  snes;
+};
+
+static PetscErrorCode DMCoarsenHook_SNESVecSol(DM,DM,void*);
+
+static PetscErrorCode DMCoarsenHookDestroy_SNESVecSol(DM dm,void *ctx)
+{
+  struct DestroyCtx *destroyctx = (struct DestroyCtx *)ctx;
+  PetscErrorCode     ierr;
+
+  PetscFunctionBegin;
+  ierr = DMCoarsenHookRemove(destroyctx->dm,DMCoarsenHook_SNESVecSol,DMRestrictHook_SNESVecSol,destroyctx->snes);CHKERRQ(ierr);
+  ierr = DMDestroy(&destroyctx->dm);CHKERRQ(ierr);
+  ierr = PetscFree(destroyctx);CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
+
 static PetscErrorCode DMCoarsenHook_SNESVecSol(DM dm,DM dmc,void *ctx)
 {
+  struct DestroyCtx *destroyctx = NULL;
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  ierr = PetscMalloc1(1,&destroyctx);CHKERRQ(ierr);
   ierr = DMCoarsenHookAdd(dmc,DMCoarsenHook_SNESVecSol,DMRestrictHook_SNESVecSol,ctx);CHKERRQ(ierr);
+  ierr = PetscObjectReference((PetscObject)dmc);CHKERRQ(ierr);
+  destroyctx->dm = dmc;
+  destroyctx->snes = (SNES)ctx;
+  ierr = DMCoarsenHookAddDestroy(dm,DMCoarsenHook_SNESVecSol,DMRestrictHook_SNESVecSol,ctx,DMCoarsenHookDestroy_SNESVecSol,destroyctx);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
