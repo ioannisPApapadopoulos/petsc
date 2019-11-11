@@ -64,7 +64,7 @@ PetscErrorCode CreateSubmesh(DM dm, PetscBool start, DM *subdm)
   if (start) {cStartSub = cStart; cEndSub = cEnd/2;}
   else       {cStartSub = cEnd/2; cEndSub = cEnd;}
   for (c = cStartSub; c < cEndSub; ++c) {ierr = DMLabelSetValue(label, c, 1);CHKERRQ(ierr);}
-  ierr = DMPlexFilter(dm, label, 1, subdm);CHKERRQ(ierr);
+  ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, label, 1, 0, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, subdm);CHKERRQ(ierr);
   ierr = PetscObjectSetName((PetscObject) *subdm, "Submesh");CHKERRQ(ierr);
   ierr = DMViewFromOptions(*subdm, NULL, "-dm_view");CHKERRQ(ierr);
   ierr = DMPlexGetSubpointMap(*subdm, &map);CHKERRQ(ierr);
