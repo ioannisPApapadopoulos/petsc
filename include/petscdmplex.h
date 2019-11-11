@@ -216,7 +216,7 @@ PETSC_EXTERN PetscErrorCode DMPlexStratifyMigrationSF(DM, PetscSF, PetscSF *);
 
 /* Submesh Support */
 typedef enum {SUBMESH_CLOSURE, SUBMESH_HYPERSURFACE, SUBMESH_USER} DMPlexSubmeshType;
-PETSC_EXTERN PetscErrorCode DMPlexCreateSubmesh(DM, DMPlexSubmeshType, DMLabel, PetscInt, PetscInt, PetscBool, PetscBool, PetscBool, PetscErrorCode (*)(DM, DMLabel, PetscInt, PetscInt, DMLabel), const char [], DM *);
+PETSC_EXTERN PetscErrorCode DMPlexCreateSubmesh(DM, DMPlexSubmeshType, DMLabel, PetscInt, PetscInt, PetscBool, PetscBool, PetscBool, PetscErrorCode (*)(DM, DMLabel, PetscInt, PetscInt, DMLabel), const char [], PetscBool, DM *);
 PETSC_EXTERN PetscErrorCode DMPlexFilter(DM, DMLabel, PetscInt, DM *);
 PETSC_EXTERN PetscErrorCode DMPlexCreateNoncohesiveSubmesh(DM, DMLabel, PetscInt, PetscBool, DM *);
 PETSC_EXTERN PetscErrorCode DMPlexCreateCohesiveSubmesh(DM, PetscBool, const char [], PetscInt, DM *);

@@ -2005,7 +2005,7 @@ PetscErrorCode DMPlexCreateHybridMesh(DM dm, DMLabel label, DMLabel bdlabel, DML
   if (dmInterface) PetscValidPointer(dmInterface, 6);
   PetscValidPointer(dmHybrid, 7);
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
-  ierr = DMPlexCreateSubmesh(dm, SUBMESH_HYPERSURFACE, label, 1, 1, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, &idm);CHKERRQ(ierr);
+  ierr = DMPlexCreateSubmesh(dm, SUBMESH_HYPERSURFACE, label, 1, 1, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_FALSE, &idm);CHKERRQ(ierr);
   ierr = DMPlexCheckValidSubmesh_Private(dm, label, idm);CHKERRQ(ierr);
   ierr = DMPlexOrient(idm);CHKERRQ(ierr);
   ierr = DMPlexGetSubpointMap(idm, &subpointMap);CHKERRQ(ierr);
@@ -3812,14 +3812,10 @@ static PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
   ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
   ierr = MPI_Comm_size(comm, &size);CHKERRQ(ierr);
   ierr = MPI_Comm_size(subcomm, &subsize);CHKERRQ(ierr);
-  if (subsize != size && subsize != 1) {
-    SETERRQ(subcomm, PETSC_ERR_PLIB, "Not implemented for subcomm not of size 1");
-  }
+  if (subsize == 1) PetscFunctionReturn(0); 
+  if (subsize != size) {SETERRQ(subcomm, PETSC_ERR_PLIB, "Not implemented for subcomm not of size 1");}
   ierr = DMGetPointSF(dm, &sf);CHKERRQ(ierr);
   ierr = DMGetPointSF(subdm, &subsf);CHKERRQ(ierr);
-  if (subsize == 1) {
-    PetscFunctionReturn(0);
-  } 
   ierr = PetscSFGetGraph(sf, &nroots, &nleaves, &ilocal, &iremote);CHKERRQ(ierr);
   if (nroots < 0) {
     ierr = PetscSFSetGraph(subsf, 0, 0, NULL, PETSC_OWN_POINTER, NULL, PETSC_OWN_POINTER);CHKERRQ(ierr);
@@ -3929,7 +3925,8 @@ static PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
 . markedFaces  - PETSC_TRUE if surface faces are marked in addition to vertices, PETSC_FALSE if only vertices are marked (only significant if submeshtype==SUBMESH_HYPERSURFACE and isCohesive==PETSC_FALSE)
 . hasLagrange  - PETSC_TRUE if the mesh has Lagrange unknowns in the cohesive cells (only significant if submeshtype==SUBMESH_HYPERSURFACE and isCohesive==PETSC_TRUE)
 . user         - The user defined function to mark subpointMap using provided filter (only significant if submeshtype==SUBMESH_USER)
-- filterName   - (optional) The name of a label existing in dm that is used as the filter. If non-NULL, afilter argument is ignored
+. filterName   - (optional) The name of a label existing in dm that is used as the filter. If non-NULL, afilter argument is ignored
+- isLocal      - PETSC_TRUE if building submesh on PETSC_COMM_SELF with a subset of locally visible points
 
   Output Parameter:
 . subdm - The submesh
@@ -3940,7 +3937,7 @@ static PetscErrorCode DMPlexSubmeshSetPointSF(DM dm, DM subdm,
 
 .seealso: DMPlexGetSubpointMap()
 @*/
-PetscErrorCode DMPlexCreateSubmesh(DM dm, DMPlexSubmeshType submeshType, DMLabel afilter, PetscInt filterValue, PetscInt height, PetscBool isCohesive, PetscBool markedFaces, PetscBool hasLagrange, PetscErrorCode (*user)(DM, DMLabel, PetscInt, PetscInt, DMLabel), const char filterName[], DM *subdm)
+PetscErrorCode DMPlexCreateSubmesh(DM dm, DMPlexSubmeshType submeshType, DMLabel afilter, PetscInt filterValue, PetscInt height, PetscBool isCohesive, PetscBool markedFaces, PetscBool hasLagrange, PetscErrorCode (*user)(DM, DMLabel, PetscInt, PetscInt, DMLabel), const char filterName[], PetscBool isLocal, DM *subdm)
 {
   PetscErrorCode   ierr;
   MPI_Comm         comm, subcomm;
@@ -3958,14 +3955,15 @@ PetscErrorCode DMPlexCreateSubmesh(DM dm, DMPlexSubmeshType submeshType, DMLabel
   PetscValidPointer(subdm, 3);
 
   ierr = PetscObjectGetComm((PetscObject)dm, &comm);CHKERRQ(ierr);
-  subcomm = comm;
+  if (isLocal) {subcomm = PETSC_COMM_SELF;}
+  else         {subcomm = comm;}
   ierr = DMCreate(subcomm, subdm);CHKERRQ(ierr);
   ierr = DMSetType(*subdm, DMPLEX);CHKERRQ(ierr);
 
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
   ierr = DMSetDimension(*subdm, dim - height);CHKERRQ(ierr);
   ierr = DMPlexGetDepth(dm, &depth);CHKERRQ(ierr);
-  if (dim - height < 0) {SETERRQ(comm, PETSC_ERR_PLIB, "Cannot create mesh with negative topological dimension");}
+  if (dim - height < 0) {SETERRQ(subcomm, PETSC_ERR_PLIB, "Cannot create mesh with negative topological dimension");}
   ierr = DMGetCoordinateDim(dm, &gdim);CHKERRQ(ierr);
   ierr = DMSetCoordinateDim(*subdm, gdim);CHKERRQ(ierr);
 
@@ -4075,7 +4073,7 @@ PetscErrorCode DMPlexFilter(DM dm, DMLabel cellLabel, PetscInt value, DM *subdm)
 {
   PetscErrorCode ierr;
   PetscFunctionBegin;
-  ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, cellLabel, value, 0, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, subdm);CHKERRQ(ierr);
+  ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, cellLabel, value, 0, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_FALSE, subdm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -4101,7 +4099,7 @@ PetscErrorCode DMPlexCreateNoncohesiveSubmesh(DM dm, DMLabel vertexLabel, PetscI
 {
   PetscErrorCode ierr;
   PetscFunctionBegin;
-  ierr = DMPlexCreateSubmesh(dm, SUBMESH_HYPERSURFACE, vertexLabel, value, 1, PETSC_FALSE, markedFaces, PETSC_FALSE, NULL, NULL, subdm);CHKERRQ(ierr);
+  ierr = DMPlexCreateSubmesh(dm, SUBMESH_HYPERSURFACE, vertexLabel, value, 1, PETSC_FALSE, markedFaces, PETSC_FALSE, NULL, NULL, PETSC_FALSE, subdm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
 
@@ -4127,6 +4125,6 @@ PetscErrorCode DMPlexCreateCohesiveSubmesh(DM dm, PetscBool hasLagrange, const c
 {
   PetscErrorCode ierr;
   PetscFunctionBegin;
-  ierr = DMPlexCreateSubmesh(dm, SUBMESH_HYPERSURFACE, NULL, value, 1, PETSC_TRUE, PETSC_FALSE, hasLagrange, NULL, labelName, subdm);CHKERRQ(ierr);
+  ierr = DMPlexCreateSubmesh(dm, SUBMESH_HYPERSURFACE, NULL, value, 1, PETSC_TRUE, PETSC_FALSE, hasLagrange, NULL, labelName, PETSC_FALSE, subdm);CHKERRQ(ierr);
   PetscFunctionReturn(0);
 }
