@@ -167,14 +167,20 @@ int main(int argc, char **argv)
   const PetscInt   filterValue = 1;
   MPI_Comm         comm;
   AppCtx           user;
-  PetscMPIInt      rank;
+  PetscMPIInt      size, rank;
   PetscErrorCode   ierr;
 
   ierr = PetscInitialize(&argc, &argv, NULL, help); if (ierr) return ierr;
   comm = PETSC_COMM_WORLD;
   ierr = ProcessOptions(comm, &user);CHKERRQ(ierr);
+  ierr = MPI_Comm_size(comm, &size);CHKERRQ(ierr);
+  if (size != 2) {
+    ierr = PetscPrintf(comm, "This example is specifically designed for size == 2.\n");CHKERRQ(ierr);
+    ierr = PetscFinalize();
+    return ierr;
+  }
   ierr = MPI_Comm_rank(comm, &rank);CHKERRQ(ierr);
-  ierr = DMLabelCreate(comm, "filter", &filter);CHKERRQ(ierr);
+  ierr = DMLabelCreate(PETSC_COMM_SELF, "filter", &filter);CHKERRQ(ierr);
 
   /* Create parallel dm */
   const PetscInt faces[2] = {4,1};
@@ -264,7 +270,7 @@ int main(int argc, char **argv)
     }
   }
 
-  ierr = DMPlexCreateSubmesh_Closure(dm, filter, filterValue, height, &subdm);
+  ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, &subdm);CHKERRQ(ierr);
   ierr = DMLabelDestroy(&filter);CHKERRQ(ierr);
 
   ierr = PetscObjectSetName((PetscObject) dm, "Example_DM");CHKERRQ(ierr);
