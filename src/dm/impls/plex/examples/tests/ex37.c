@@ -26,6 +26,10 @@ Global numbering:
 * all subpoints = {...} defined below are given in the global numbering
 
 
+testNum 0:  Test results are shown below
+testNum 1:  Submeshes are generated only on rank 0
+
+
                             dm                                        subdm
                          -------                                    ---------
 
@@ -140,6 +144,7 @@ rank 1:          (20) (2)  15  0   16  1   17     -->
 */
 
 typedef struct {
+  PetscInt  testNum;                      /* Test # */
   PetscInt  subdim;                       /* Indicates the mesh to create */
   PetscInt  overlap;                      /* The partition overlap */
 } AppCtx;
@@ -149,10 +154,12 @@ PetscErrorCode ProcessOptions(MPI_Comm comm, AppCtx *options)
   PetscErrorCode ierr;
 
   PetscFunctionBegin;
+  options->testNum = 0;
   options->subdim  = 2;
   options->overlap = 0;
 
   ierr = PetscOptionsBegin(comm, "", "Meshing Interpolation Test Options", "DMPLEX");CHKERRQ(ierr);
+  ierr = PetscOptionsBoundedInt("-test_num", "The test #", "ex37.c", options->testNum, &options->testNum, NULL,0);CHKERRQ(ierr);
   ierr = PetscOptionsBoundedInt("-subdim", "The mesh to create", "ex37.c", options->subdim, &options->subdim, NULL,0);CHKERRQ(ierr);
   ierr = PetscOptionsBoundedInt("-overlap", "The partition overlap", "ex37.c", options->overlap, &options->overlap, NULL,0);CHKERRQ(ierr);
   ierr = PetscOptionsEnd();
@@ -270,16 +277,28 @@ int main(int argc, char **argv)
     }
   }
 
-  ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, &subdm);CHKERRQ(ierr);
-  ierr = DMLabelDestroy(&filter);CHKERRQ(ierr);
-
   ierr = PetscObjectSetName((PetscObject) dm, "Example_DM");CHKERRQ(ierr);
-  ierr = PetscObjectSetName((PetscObject) subdm, "Example_SubDM");CHKERRQ(ierr);
   ierr = DMViewFromOptions(dm, NULL, "-dm_view");CHKERRQ(ierr);
-  ierr = DMViewFromOptions(subdm, NULL, "-dm_view");CHKERRQ(ierr);
-
+  switch (user.testNum) {
+    case 0:
+      ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_FALSE, &subdm);CHKERRQ(ierr);
+      ierr = PetscObjectSetName((PetscObject) subdm, "Example_SubDM");CHKERRQ(ierr);
+      ierr = DMViewFromOptions(subdm, NULL, "-dm_view");CHKERRQ(ierr);
+      ierr = DMDestroy(&subdm);CHKERRQ(ierr);
+      break;
+    case 1:
+    /* Submesh only on rank ==0 */
+      if (rank == 0) {
+        ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_TRUE, &subdm);CHKERRQ(ierr);
+        ierr = PetscObjectSetName((PetscObject) subdm, "Example_SubDM_Local");CHKERRQ(ierr);
+        ierr = DMViewFromOptions(subdm, NULL, "-dm_view");CHKERRQ(ierr);
+        ierr = DMDestroy(&subdm);CHKERRQ(ierr);
+      }
+      break;
+  }
+  ierr = DMLabelDestroy(&filter);CHKERRQ(ierr);
   ierr = DMDestroy(&dm);CHKERRQ(ierr);
-  ierr = DMDestroy(&subdm);CHKERRQ(ierr);
+
   ierr = PetscFinalize();
   return ierr;
 }
@@ -290,26 +309,50 @@ int main(int argc, char **argv)
   test:
     suffix: 0
     nsize: 2
-    args: -subdim 2 -overlap 0 -dm_view ascii::ascii_info_detail
+    args: -test_num 0 -subdim 2 -overlap 0 -dm_view ascii::ascii_info_detail
   test:
     suffix: 1
     nsize: 2
-    args: -subdim 1 -overlap 0 -dm_view ascii::ascii_info_detail
+    args: -test_num 0 -subdim 1 -overlap 0 -dm_view ascii::ascii_info_detail
   test:
     suffix: 2
     nsize: 2
-    args: -subdim 0 -overlap 0 -dm_view ascii::ascii_info_detail
+    args: -test_num 0 -subdim 0 -overlap 0 -dm_view ascii::ascii_info_detail
   test:
     suffix: 3
     nsize: 2
-    args: -subdim 2 -overlap 1 -dm_view ascii::ascii_info_detail
+    args: -test_num 0 -subdim 2 -overlap 1 -dm_view ascii::ascii_info_detail
   test:
     suffix: 4
     nsize: 2
-    args: -subdim 1 -overlap 1 -dm_view ascii::ascii_info_detail
+    args: -test_num 0 -subdim 1 -overlap 1 -dm_view ascii::ascii_info_detail
   test:
     suffix: 5
     nsize: 2
-    args: -subdim 0 -overlap 1 -dm_view ascii::ascii_info_detail
+    args: -test_num 0 -subdim 0 -overlap 1 -dm_view ascii::ascii_info_detail
+  test:
+    suffix: 6
+    nsize: 2
+    args: -test_num 1 -subdim 2 -overlap 0 -dm_view ascii::ascii_info_detail
+  test:
+    suffix: 7
+    nsize: 2
+    args: -test_num 1 -subdim 1 -overlap 0 -dm_view ascii::ascii_info_detail
+  test:
+    suffix: 8
+    nsize: 2
+    args: -test_num 1 -subdim 0 -overlap 0 -dm_view ascii::ascii_info_detail
+  test:
+    suffix: 9
+    nsize: 2
+    args: -test_num 1 -subdim 2 -overlap 1 -dm_view ascii::ascii_info_detail
+  test:
+    suffix: 10
+    nsize: 2
+    args: -test_num 1 -subdim 1 -overlap 1 -dm_view ascii::ascii_info_detail
+  test:
+    suffix: 11
+    nsize: 2
+    args: -test_num 1 -subdim 0 -overlap 1 -dm_view ascii::ascii_info_detail
 
 TEST*/

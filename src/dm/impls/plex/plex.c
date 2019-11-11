@@ -7848,7 +7848,7 @@ PetscErrorCode DMCreateSubDomainDM_Plex(DM dm, DMLabel label, PetscInt value, IS
   if (!section) SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Must set default section for DM before splitting subdomain");
   if (!subdm)   SETERRQ(PetscObjectComm((PetscObject) dm), PETSC_ERR_ARG_WRONG, "Must set output subDM for splitting subdomain");
   /* Create subdomain */
-  ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, label, value, 0, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, subdm);CHKERRQ(ierr);
+  ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, label, value, 0, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_FALSE, subdm);CHKERRQ(ierr);
   /* Create submodel */
   ierr = DMPlexCreateSubpointIS(*subdm, &subis);CHKERRQ(ierr);
   ierr = PetscSectionCreateSubmeshSection(section, subis, &subsection);CHKERRQ(ierr);
