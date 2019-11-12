@@ -1885,6 +1885,43 @@ PetscErrorCode DMPlexGetOverlap(DM dm, PetscInt *overlap)
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode DMPlexSetOverlap_Plex(DM dm, PetscInt overlap)
+{
+  DM_Plex        *mesh  = (DM_Plex*) dm->data;
+
+  PetscFunctionBegin;
+  mesh->overlap = overlap;
+  PetscFunctionReturn(0);
+}
+
+/*@
+  DMPlexSetOverlap - Set the DMPlex partition overlap.
+
+  Not collective
+
+  Input Parameter:
++ dm - The DM
+- overlap - The new overlap of this DM
+
+  Notes:
+  This function is used to set the overlap size of a submesh that is extracted from a distributed mesh.
+  The overlap size of submesh may be different from that of the original mesh.
+
+  To set the overlap of a mesh to be distributed, simply pass the value to DMPlexDistribute().
+
+  Level: intermediate
+
+.seealso: DMPlexDistribute(), DMPlexDistributeOverlap(), DMPlexCreateOverlapLabel()
+@*/
+PetscErrorCode DMPlexSetOverlap(DM dm, PetscInt overlap)
+{
+  PetscErrorCode     ierr;
+
+  PetscFunctionBegin;
+  PetscValidHeaderSpecific(dm, DM_CLASSID, 1);
+  ierr = PetscUseMethod(dm,"DMPlexSetOverlap_C",(DM,PetscInt),(dm,overlap));CHKERRQ(ierr);
+  PetscFunctionReturn(0);
+}
 
 /*@C
   DMPlexGetGatherDM - Get a copy of the DMPlex that gathers all points on the

@@ -328,6 +328,7 @@ PETSC_INTERN PetscErrorCode DMPlexCoarsen_Internal(DM, DMLabel, DM *);
 PETSC_INTERN PetscErrorCode DMCreateMatrix_Plex(DM, Mat*);
 
 PETSC_INTERN PetscErrorCode DMPlexGetOverlap_Plex(DM, PetscInt *);
+PETSC_INTERN PetscErrorCode DMPlexSetOverlap_Plex(DM, PetscInt);
 
 /* invert dihedral symmetry: return a^-1,
  * using the representation described in
