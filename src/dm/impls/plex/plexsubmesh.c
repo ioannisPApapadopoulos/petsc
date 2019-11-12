@@ -3526,7 +3526,7 @@ static PetscErrorCode DMPlexSubmeshGetDepth(DM dm, DM subdm, PetscInt *subdepth)
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode DMPlexSubmeshSetConeSizes(DM dm, DM subdm, const PetscInt subdim,
+static PetscErrorCode DMPlexSubmeshSetConeSizes(DM dm, DM subdm, const PetscInt subdepth,
                                                 const PetscInt *stratumOffsets,
                                                 const PetscInt *stratumSizes,
                                                 const PetscInt **stratumIndices)
@@ -3541,7 +3541,7 @@ static PetscErrorCode DMPlexSubmeshSetConeSizes(DM dm, DM subdm, const PetscInt 
   ierr = DMPlexGetSubpointMap(subdm, &subpointMap);CHKERRQ(ierr);
   ierr = DMLabelCreateIndex(subpointMap, pStart, pEnd);CHKERRQ(ierr);
 
-  for (d = 0; d <= subdim; ++d) {
+  for (d = 0; d <= subdepth; ++d) {
     for (p = 0; p < stratumSizes[d]; ++p) {
       const PetscInt point = stratumIndices[d][p];
       const PetscInt subpoint = stratumOffsets[d] + p;
@@ -3562,33 +3562,51 @@ static PetscErrorCode DMPlexSubmeshSetConeSizes(DM dm, DM subdm, const PetscInt 
   PetscFunctionReturn(0);
 }
 
-static PetscErrorCode DMPlexSubmeshSetCones(DM dm, DM subdm, const PetscInt subdim,
+static PetscErrorCode DMPlexSubmeshSetCones(DM dm, DM subdm, const PetscInt subdepth,
                                             const PetscInt *stratumOffsets,
                                             const PetscInt *stratumSizes,
                                             const PetscInt **stratumIndices)
 {
   PetscInt       *coneNew, *orntNew;
-  PetscInt        maxConeSize, p, dim, d, VTKCellHeight;
+  PetscInt        maxConeSize, p, dim, subdim, d, VTKCellHeight;
   PetscInt        cEnd, cMax;
-  PetscBool       isHyperSurface = (VTKCellHeight == 1);
   PetscErrorCode  ierr;
 
   PetscFunctionBegin;
 
   ierr = DMGetDimension(dm, &dim);CHKERRQ(ierr);
+  ierr = DMGetDimension(subdm, &subdim);CHKERRQ(ierr);
   ierr = DMPlexGetVTKCellHeight(subdm, &VTKCellHeight);CHKERRQ(ierr);
   ierr = DMPlexGetMaxSizes(dm, &maxConeSize, NULL);CHKERRQ(ierr);
   ierr = PetscMalloc2(maxConeSize, &coneNew, maxConeSize, &orntNew);CHKERRQ(ierr);
   ierr = DMPlexGetHeightStratum(dm, 0, NULL, &cEnd);CHKERRQ(ierr);
   ierr = DMPlexGetHybridBounds(dm, &cMax, NULL, NULL, NULL);CHKERRQ(ierr);
   cMax = (cMax < 0) ? cEnd : cMax;
-  for (d = 0; d <= subdim; ++d) {
+  for (d = 0; d <= subdepth; ++d) {
     for (p = 0; p < stratumSizes[d]; ++p) {
       const PetscInt  point    = stratumIndices[d][p];
       const PetscInt  subpoint = stratumOffsets[d] + p;
       const PetscInt *cone, *ornt;
       PetscInt        coneSize, subconeSize, coneSizeNew, c, subc, fornt=0;
-      if (isHyperSurface && d == dim-1) {
+
+      ierr = DMPlexGetConeSize(dm, point, &coneSize);CHKERRQ(ierr);
+      ierr = DMPlexGetConeSize(subdm, subpoint, &subconeSize);CHKERRQ(ierr);
+      ierr = DMPlexGetCone(dm, point, &cone);CHKERRQ(ierr);
+      ierr = DMPlexGetConeOrientation(dm, point, &ornt);CHKERRQ(ierr);
+      coneSizeNew = 0;
+      for (c = 0; c < coneSize; ++c) {
+        ierr = PetscFindInt(cone[c], stratumSizes[d-1], stratumIndices[d-1], &subc);CHKERRQ(ierr);
+        if (subc >= 0) {
+          coneNew[coneSizeNew] = stratumOffsets[d-1] + subc;
+          orntNew[coneSizeNew] = ornt[c];
+          ++coneSizeNew;
+        }
+      }
+      if (coneSizeNew != subconeSize) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Number of cone points located %d does not match subcone size %d", coneSizeNew, subconeSize);
+      ierr = DMPlexSetCone(subdm, subpoint, coneNew);CHKERRQ(ierr);
+      ierr = DMPlexSetConeOrientation(subdm, subpoint, orntNew);CHKERRQ(ierr);
+
+      if (subdim == dim-1 && d == dim-1) {
         const PetscInt *support, *scone, *sornt;
         PetscInt        supportSize, sconeSize, s, subc;
 
@@ -3614,23 +3632,6 @@ static PetscErrorCode DMPlexSubmeshSetCones(DM dm, DM subdm, const PetscInt subd
           }
         }
       }
-      ierr = DMPlexGetConeSize(dm, point, &coneSize);CHKERRQ(ierr);
-      ierr = DMPlexGetConeSize(subdm, subpoint, &subconeSize);CHKERRQ(ierr);
-      ierr = DMPlexGetCone(dm, point, &cone);CHKERRQ(ierr);
-      ierr = DMPlexGetConeOrientation(dm, point, &ornt);CHKERRQ(ierr);
-      coneSizeNew = 0;
-      for (c = 0; c < coneSize; ++c) {
-        ierr = PetscFindInt(cone[c], stratumSizes[d-1], stratumIndices[d-1], &subc);CHKERRQ(ierr);
-        if (subc >= 0) {
-          coneNew[coneSizeNew] = stratumOffsets[d-1] + subc;
-          orntNew[coneSizeNew] = ornt[c];
-          ++coneSizeNew;
-        }
-      }
-      if (coneSizeNew != subconeSize) SETERRQ2(PETSC_COMM_SELF, PETSC_ERR_PLIB, "Number of cone points located %d does not match subcone size %d", coneSizeNew, subconeSize);
-      ierr = DMPlexSetCone(subdm, subpoint, coneNew);CHKERRQ(ierr);
-      ierr = DMPlexSetConeOrientation(subdm, subpoint, orntNew);CHKERRQ(ierr);
-
       if (fornt < 0) {
         /* This should be replaced by a call to DMPlexReverseCell() */
 #if 0
@@ -3969,16 +3970,30 @@ PetscErrorCode DMPlexCreateSubmesh(DM dm, DMPlexSubmeshType submeshType, DMLabel
   if (dim - height < 0) {SETERRQ(subcomm, PETSC_ERR_PLIB, "Cannot create mesh with negative topological dimension");}
   ierr = DMGetCoordinateDim(dm, &gdim);CHKERRQ(ierr);
   ierr = DMSetCoordinateDim(*subdm, gdim);CHKERRQ(ierr);
+  ierr = DMPlexSetVTKCellHeight(*subdm, height);CHKERRQ(ierr);
 
-  /* Copy adjacency rules from dm to subdm */
+  /* Copy adjacency rules from dm to subdm:
+
+     If using different adjacency rules for the subdm, do:
+     - DMClone() the dm,
+     - Set the new adjacency rules on the clone
+     - Use the clone when calling this function
+     - DMDestroy() the clone
+
+     This is because, in DMPlexMarkSubpointMap_Closure(),
+     DMPlexGetAdjacency() with desired adjacency rules
+     must act on the parent dm. */
   {
     PetscBool        useCone, useClosure;
+    PetscInt         overlap;
     PetscBool        useAnchors;
     PetscErrorCode (*useradjacency)(DM,PetscInt,PetscInt*,PetscInt[],void*);
     void            *useradjacencyctx;
 
     ierr = DMGetAdjacency(dm, -1, &useCone, &useClosure);CHKERRQ(ierr);
     ierr = DMSetAdjacency(*subdm, -1, useCone, useClosure);CHKERRQ(ierr);
+    ierr = DMPlexGetOverlap(dm, &overlap);CHKERRQ(ierr);
+    ierr = DMPlexSetOverlap(*subdm, overlap);CHKERRQ(ierr);
     ierr = DMPlexGetAdjacencyUser(dm, &useradjacency, &useradjacencyctx);CHKERRQ(ierr);
     ierr = DMPlexSetAdjacencyUser(*subdm, useradjacency, useradjacencyctx);CHKERRQ(ierr);
     ierr = DMPlexGetAdjacencyUseAnchors(dm, &useAnchors);CHKERRQ(ierr);
@@ -3992,11 +4007,9 @@ PetscErrorCode DMPlexCreateSubmesh(DM dm, DMPlexSubmeshType submeshType, DMLabel
   else            {filter = afilter;}
 
   if (submeshType == SUBMESH_CLOSURE) {
-    ierr = DMPlexSetVTKCellHeight(*subdm, -1);CHKERRQ(ierr);
     ierr = DMPlexMarkSubpointMap_Closure(dm, filter, filterValue, height, subpointMap);CHKERRQ(ierr);
   } else if (submeshType == SUBMESH_HYPERSURFACE) {
     if (height != 1) {SETERRQ(comm, PETSC_ERR_PLIB, "`height` must be 1 if `submeshType == SUBMESH_HYPERSURFACE`.");}
-    ierr = DMPlexSetVTKCellHeight(*subdm, height);CHKERRQ(ierr);
     /* filter must be a vertex label */
     if (depth == dim) {
       if (isCohesive) {ierr = DMPlexMarkCohesiveSubmesh_Interpolated(dm, filter, filterValue, subpointMap, *subdm);CHKERRQ(ierr);}
@@ -4007,7 +4020,6 @@ PetscErrorCode DMPlexCreateSubmesh(DM dm, DMPlexSubmeshType submeshType, DMLabel
       PetscFunctionReturn(0);
     }
   } else if (submeshType == SUBMESH_USER) {
-      ierr = DMPlexSetVTKCellHeight(*subdm, -1);CHKERRQ(ierr);
       ierr = (*user)(dm, filter, filterValue, height, subpointMap);CHKERRQ(ierr);
   } else {
     SETERRQ(comm, PETSC_ERR_PLIB, "Unknown DMPlexSubmeshType.");
@@ -4049,7 +4061,7 @@ PetscErrorCode DMPlexCreateSubmesh(DM dm, DMPlexSubmeshType submeshType, DMLabel
   }
   ierr = PetscFree4(stratumSizes, stratumOffsets, stratumIndices, stratumISes);CHKERRQ(ierr);
 
-  ierr = DMPlexCheckFaces(*subdm, subdepth-(dim-height));CHKERRQ(ierr);
+  if (submeshType == SUBMESH_CLOSURE) {ierr = DMPlexCheckFaces(*subdm, subdepth-(dim-height));CHKERRQ(ierr);}
   ierr = DMPlexCheckSymmetry(*subdm);CHKERRQ(ierr);
 
   PetscFunctionReturn(0);
