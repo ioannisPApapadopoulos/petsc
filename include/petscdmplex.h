@@ -229,7 +229,18 @@ PETSC_EXTERN PetscErrorCode DMPlexCreateOverlapMigrationSF(DM, PetscSF, PetscSF 
 PETSC_EXTERN PetscErrorCode DMPlexStratifyMigrationSF(DM, PetscSF, PetscSF *);
 
 /* Submesh Support */
-typedef enum {SUBMESH_CLOSURE, SUBMESH_HYPERSURFACE, SUBMESH_USER} DMPlexSubmeshType;
+typedef enum {DMPLEX_SUBMESH_CLOSURE, DMPLEX_SUBMESH_HYPERSURFACE, DMPLEX_SUBMESH_USER} DMPlexSubmeshType;
+/*E
+  DMPlexSubmeshType - type of completion rule for DMPlexCreateSubmesh
+
+$ DMPLEX_SUBMESH_CLOSURE      - Provided label marked at the submesh cell level, include the transitive closures of the marked points
+$ DMPLEX_SUBMESH_HYPERSURFACE - Provided label marked at the vertex level, include the hyper-surfaces containing the marked points and the supports of these hyper-surfaces
+$ DMPLEX_SUBMESH_USER         - Use user defined completion rule
+
+  Level: advanced
+
+.seealso: DMPlexCreateSubmesh()
+E*/
 PETSC_EXTERN PetscErrorCode DMPlexCreateSubmesh(DM, DMPlexSubmeshType, DMLabel, PetscInt, PetscInt, PetscBool, PetscBool, PetscBool, PetscErrorCode (*)(DM, DMLabel, PetscInt, PetscInt, DMLabel), const char [], PetscBool, DM *);
 PETSC_EXTERN PetscErrorCode DMPlexFilter(DM, DMLabel, PetscInt, DM *);
 PETSC_EXTERN PetscErrorCode DMPlexCreateNoncohesiveSubmesh(DM, DMLabel, PetscInt, PetscBool, DM *);

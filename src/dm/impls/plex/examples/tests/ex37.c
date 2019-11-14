@@ -344,7 +344,7 @@ int main(int argc, char **argv)
   ierr = DMViewFromOptions(dm, NULL, "-dm_view");CHKERRQ(ierr);
   switch (user.testNum) {
     case 0:
-      ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_FALSE, &subdm);CHKERRQ(ierr);
+      ierr = DMPlexCreateSubmesh(dm, DMPLEX_SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_FALSE, &subdm);CHKERRQ(ierr);
       ierr = PetscObjectSetName((PetscObject) subdm, "Example_SubDM");CHKERRQ(ierr);
       ierr = DMViewFromOptions(subdm, NULL, "-dm_view");CHKERRQ(ierr);
       ierr = DMDestroy(&subdm);CHKERRQ(ierr);
@@ -352,7 +352,7 @@ int main(int argc, char **argv)
     case 1:
     /* Submesh only on rank == 0 */
       if (rank == 0) {
-        ierr = DMPlexCreateSubmesh(dm, SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_TRUE, &subdm);CHKERRQ(ierr);
+        ierr = DMPlexCreateSubmesh(dm, DMPLEX_SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_TRUE, &subdm);CHKERRQ(ierr);
         ierr = PetscObjectSetName((PetscObject) subdm, "Example_SubDM_Local");CHKERRQ(ierr);
         ierr = DMViewFromOptions(subdm, NULL, "-dm_view");CHKERRQ(ierr);
         ierr = DMDestroy(&subdm);CHKERRQ(ierr);
@@ -366,7 +366,7 @@ int main(int argc, char **argv)
       ierr = DMClone(dm, &dmCopy);CHKERRQ(ierr);
       ierr = DMPlexSetOverlap(dmCopy, 0);CHKERRQ(ierr);
       if (rank == 0) {
-        ierr = DMPlexCreateSubmesh(dmCopy, SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_TRUE, &subdm);CHKERRQ(ierr);
+        ierr = DMPlexCreateSubmesh(dmCopy, DMPLEX_SUBMESH_CLOSURE, filter, filterValue, height, PETSC_FALSE, PETSC_FALSE, PETSC_FALSE, NULL, NULL, PETSC_TRUE, &subdm);CHKERRQ(ierr);
         ierr = PetscObjectSetName((PetscObject) subdm, "Example_SubDM_Local");CHKERRQ(ierr);
         ierr = DMViewFromOptions(subdm, NULL, "-dm_view");CHKERRQ(ierr);
         ierr = DMDestroy(&subdm);CHKERRQ(ierr);
