@@ -22,6 +22,7 @@ typedef struct {
   IS                   cells;              /* [patch][cell in patch]: Cell number */
   IS                   extFacets;
   IS                   intFacets;
+  IS                   extFacetsToPatchCell; /* Support of exterior facet in local patch point numbering: AKA which cell touches the facet (in patch local numbering of cells) */
   IS                   intFacetsToPatchCell; /* Support of interior facet in local patch point numbering: AKA which two cells touch the facet (in patch local numbering of cells) */
   PetscSection         intFacetCounts;
   PetscSection         extFacetCounts;
@@ -64,6 +65,12 @@ typedef struct {
   void                *usercomputeopctx;
   PetscErrorCode     (*usercomputef)(PC, PetscInt, Vec, Vec, IS, PetscInt, const PetscInt *, const PetscInt *, void *);
   void                *usercomputefctx;
+  /* Exterior facet integrals: Jacobian */
+  PetscErrorCode     (*usercomputeopextfacet)(PC, PetscInt, Vec, Mat, IS, PetscInt, const PetscInt *, const PetscInt *, void *);
+  void                *usercomputeopextfacetctx;
+  /* Residual */
+  PetscErrorCode     (*usercomputefextfacet)(PC, PetscInt, Vec, Vec, IS, PetscInt, const PetscInt *, const PetscInt *, void *);
+  void                *usercomputefextfacetctx;
   /* Interior facet integrals: Jacobian */
   PetscErrorCode     (*usercomputeopintfacet)(PC, PetscInt, Vec, Mat, IS, PetscInt, const PetscInt *, const PetscInt *, void *);
   void                *usercomputeopintfacetctx;
@@ -75,13 +82,16 @@ typedef struct {
   PetscBool            precomputeElementTensors; /* Precompute all element tensors (each cell is assembled exactly once)? */
   IS                   allCells;                 /* Unique cells in union of all patches */
   IS                   allIntFacets;                 /* Unique interior facets in union of all patches */
+  IS                   allExtFacets;                 /* Unique exterior facets in union of all patches */
   PetscBool            partition_of_unity; /* Weight updates by dof multiplicity? */
   PetscBool            multiplicative;     /* Gauss-Seidel instead of Jacobi?  */
   PCCompositeType      local_composition_type; /* locally additive or multiplicative? */
   /* Patch solves */
   Vec                  cellMats;           /* Cell element tensors */
   PetscInt            *precomputedTensorLocations; /* Locations of the precomputed tensors for each cell. */
+  Vec                  extFacetMats;               /* exterior facet element tensors */
   Vec                  intFacetMats;               /* interior facet element tensors */
+  PetscInt            *precomputedExtFacetTensorLocations; /* Locations of the precomputed tensors for each exterior facet. */
   PetscInt            *precomputedIntFacetTensorLocations; /* Locations of the precomputed tensors for each interior facet. */
   Mat                 *mat;                /* System matrix for each patch */
   Mat                 *matWithArtificial;   /* System matrix including dofs with artificial bcs for each patch */
