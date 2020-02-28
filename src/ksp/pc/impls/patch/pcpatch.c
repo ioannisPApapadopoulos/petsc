@@ -1177,10 +1177,12 @@ static PetscErrorCode PCPatchCreateCellPatches(PC pc)
       if (fStart <= point && point < fEnd) {
         const PetscInt *support;
         PetscInt supportSize, p;
+        PetscInt cell;
         PetscBool interior = PETSC_TRUE;
         ierr = DMPlexGetSupport(dm, point, &support);CHKERRQ(ierr);
         ierr = DMPlexGetSupportSize(dm, point, &supportSize);CHKERRQ(ierr);
         if (supportSize == 1) {
+          cell = 0;
           interior = PETSC_FALSE;
         } else {
           for (p = 0; p < supportSize; p++) {
@@ -1189,6 +1191,8 @@ static PetscErrorCode PCPatchCreateCellPatches(PC pc)
             PetscHSetIHas(cht, support[p], &found);
             if (!found) {
               interior = PETSC_FALSE;
+              /* Other cell is inside the patch. */
+              cell = (p+1)%2;
               break;
             }
           }
@@ -1198,7 +1202,7 @@ static PetscErrorCode PCPatchCreateCellPatches(PC pc)
           intFacetsToPatchCell[2*(ifoff + ifn) + 1] = support[1];
           intFacetsArray[ifoff + ifn++] = point;
         } else {
-          extFacetsToPatchCell[efoff + efn] = support[0];
+          extFacetsToPatchCell[efoff + efn] = support[cell];
           extFacetsArray[efoff + efn++] = point;
         }
       }
