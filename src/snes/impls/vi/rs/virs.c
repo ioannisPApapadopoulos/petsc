@@ -433,7 +433,7 @@ PetscErrorCode SNESSolve_VINEWTONRSLS(SNES snes)
     ierr = ISEqual(vi->IS_inact_prev,vi->IS_inact,&isequal);CHKERRQ(ierr);
     if (!isequal) {
       ierr = SNESVIResetPCandKSP(snes,jac_inact_inact,prejac_inact_inact);CHKERRQ(ierr);
-      ierr = PCFieldSplitRestrictIS(pc,vi->IS_inact);CHKERRQ(ierr);
+      //ierr = PCFieldSplitRestrictIS(pc,vi->IS_inact);CHKERRQ(ierr);
     }
 
     /*      ierr = ISView(vi->IS_inact,0);CHKERRQ(ierr); */
@@ -444,6 +444,7 @@ PetscErrorCode SNESSolve_VINEWTONRSLS(SNES snes)
 
     ierr = KSPSetOperators(snes->ksp,jac_inact_inact,prejac_inact_inact);CHKERRQ(ierr);
     ierr = KSPSetUp(snes->ksp);CHKERRQ(ierr);
+    /*
     {
       PC        pc;
       PetscBool flg;
@@ -472,7 +473,7 @@ PetscErrorCode SNESSolve_VINEWTONRSLS(SNES snes)
         }
       }
     }
-
+    */
     ierr = KSPSolve(snes->ksp,F_inact,Y_inact);CHKERRQ(ierr);
     ierr = VecCopy(Y_inact,Y);CHKERRQ(ierr);
 
@@ -660,6 +661,7 @@ PetscErrorCode SNESSetUp_VINEWTONRSLS(SNES snes)
   /* Set up previous active index set for the first snes solve
    vi->IS_inact_prev = 0,1,2,....N */
 
+ 
   ierr = VecGetOwnershipRange(snes->vec_sol,&rstart,&rend);CHKERRQ(ierr);
   ierr = VecGetLocalSize(snes->vec_sol,&n);CHKERRQ(ierr);
   ierr = PetscMalloc1(n,&indices);CHKERRQ(ierr);
